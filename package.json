@@ -44,7 +44,7 @@
 		"@spences10/pi-child-env": "workspace:*",
 		"@spences10/pi-project-trust": "workspace:*",
 		"@spences10/pi-tui-modal": "workspace:*",
-		"typebox": "^1.1.37"
+		"typebox": "^1.1.38"
 	},
 	"devDependencies": {
 		"@types/node": "^25.6.0",

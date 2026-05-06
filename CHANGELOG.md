@@ -1,5 +1,12 @@
 # @spences10/pi-lsp
 
+## 0.0.15
+
+### Patch Changes
+
+- 1ef0bb8: Fix skills reload using fresh profile config so enabled
+  cl-\* skills appear after TUI reload.
+
 ## 0.0.14
 
 ### Patch Changes

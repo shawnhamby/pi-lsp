@@ -1,5 +1,19 @@
 # @spences10/pi-lsp
 
+## 0.0.17
+
+### Patch Changes
+
+- dacf04d: Simplify skills TUI navigation, split importable skill
+  actions, and clarify profile policy/rule wording.
+- 44136fe: Migrate Pi core dependencies from Mario Zechner scope to
+  Earendil Works package scope.
+- Updated dependencies [dacf04d]
+- Updated dependencies [44136fe]
+  - @spences10/pi-project-trust@0.0.6
+  - @spences10/pi-child-env@0.1.4
+  - @spences10/pi-tui-modal@0.0.9
+
 ## 0.0.16
 
 ### Patch Changes

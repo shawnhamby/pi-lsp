@@ -1,4 +1,4 @@
-import type { BeforeAgentStartEvent } from '@mariozechner/pi-coding-agent';
+import type { BeforeAgentStartEvent } from '@earendil-works/pi-coding-agent';
 
 export const LSP_TOOL_NAMES = new Set([
 	'lsp_diagnostics',

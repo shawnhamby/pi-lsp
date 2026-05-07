@@ -1,4 +1,4 @@
-import { getAgentDir } from '@mariozechner/pi-coding-agent';
+import { getAgentDir } from '@earendil-works/pi-coding-agent';
 import {
 	is_project_subject_trusted,
 	read_project_trust_store,

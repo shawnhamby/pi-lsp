@@ -1,4 +1,4 @@
-import { type ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { type ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { register_lsp_command } from './commands.js';
 import {
 	append_lsp_system_prompt,

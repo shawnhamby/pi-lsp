@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { rmSync } from 'node:fs';
 import { afterEach, vi } from 'vitest';
 import type { LspClientLike } from '../src/index.js';

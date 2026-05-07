@@ -1,4 +1,4 @@
-import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { resolve_project_trust } from '@spences10/pi-project-trust';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';

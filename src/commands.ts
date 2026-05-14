@@ -54,9 +54,8 @@ export async function handle_lsp_command(
 ): Promise<void> {
 	const parts = args.trim() ? args.trim().split(/\s+/, 2) : [];
 	if (parts.length === 0 && has_modal_ui(ctx)) {
-		while (true) {
-			const selected = await show_lsp_home_modal(ctx, manager);
-			if (!selected) return;
+		let selected: string | undefined;
+		while ((selected = await show_lsp_home_modal(ctx, manager))) {
 			if (selected === 'restart') {
 				await handle_lsp_restart_modal(ctx, manager);
 				continue;
@@ -80,6 +79,7 @@ export async function handle_lsp_command(
 				),
 			);
 		}
+		return;
 	}
 
 	const [subcommand = 'status', target] = parts;

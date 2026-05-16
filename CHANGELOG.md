@@ -1,5 +1,14 @@
 # @spences10/pi-lsp
 
+## 0.0.22
+
+### Patch Changes
+
+- bea8707: Add package-specific homepage links so Pi gallery pages
+  point to each package README.
+- 3e91b90: Add shared package gallery preview image to all Pi package
+  manifests.
+
 ## 0.0.21
 
 ### Patch Changes

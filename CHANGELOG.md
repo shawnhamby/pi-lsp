@@ -1,5 +1,14 @@
 # @spences10/pi-lsp
 
+## 0.0.21
+
+### Patch Changes
+
+- 8944bf8: Move Pi core runtime packages to peer dependencies for
+  safer external extension installs.
+- Updated dependencies [8944bf8]
+  - @spences10/pi-tui-modal@0.0.13
+
 ## 0.0.20
 
 ### Patch Changes

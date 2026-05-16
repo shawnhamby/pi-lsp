@@ -38,7 +38,9 @@
 		"check": "pnpm --filter \"$npm_package_name^...\" run build:self && pnpm run check:self",
 		"check:self": "tsc --noEmit -p tsconfig.json",
 		"test": "pnpm --filter \"$npm_package_name^...\" run build:self && pnpm run test:self",
-		"test:self": "vitest run"
+		"test:self": "vitest run",
+		"coverage:self": "vitest run --coverage",
+		"coverage": "pnpm --filter \"$npm_package_name^...\" run build:self && pnpm run coverage:self"
 	},
 	"dependencies": {
 		"@spences10/pi-child-env": "workspace:*",

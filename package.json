@@ -8,6 +8,7 @@
 		"pi",
 		"pi-package"
 	],
+	"homepage": "https://github.com/spences10/my-pi/tree/main/packages/pi-lsp#readme",
 	"license": "MIT",
 	"author": "Scott Spence <me@scottspence.com>",
 	"repository": {

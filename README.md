@@ -5,8 +5,10 @@
 [![npm version](https://img.shields.io/npm/v/@spences10/pi-lsp?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@spences10/pi-lsp)
 [![license](https://img.shields.io/npm/l/@spences10/pi-lsp)](https://www.npmjs.com/package/@spences10/pi-lsp)
 
-Pi extension that exposes Language Server Protocol diagnostics, hover,
-definitions, references, and document symbols to the model.
+Give agents precise code intelligence instead of guesswork. `pi-lsp`
+exposes language-server diagnostics, hovers, definitions, references,
+and symbols as Pi tools so models can validate edits and navigate
+typed codebases accurately.
 
 ## Installation
 

@@ -1,13 +1,12 @@
 # @spences10/pi-lsp
 
-[![npm version](https://img.shields.io/npm/v/@spences10/pi-lsp?color=CB3837&logo=npm)](https://www.npmjs.com/package/@spences10/pi-lsp)
 [![built with Vite+](https://img.shields.io/badge/built%20with-Vite+-646CFF?logo=vite&logoColor=white)](https://viteplus.dev)
 [![tested with Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
+[![npm version](https://img.shields.io/npm/v/@spences10/pi-lsp?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@spences10/pi-lsp)
+[![license](https://img.shields.io/npm/l/@spences10/pi-lsp)](https://www.npmjs.com/package/@spences10/pi-lsp)
 
 Pi extension that exposes Language Server Protocol diagnostics, hover,
 definitions, references, and document symbols to the model.
-
-Maintained in the `my-pi` Vite+ workspace and tested with Vitest.
 
 ## Installation
 
@@ -103,6 +102,9 @@ import lsp from '@spences10/pi-lsp';
 LSP extension.
 
 ## Development
+
+Package scripts build transitive workspace dependencies first, then
+run local tools through Vite+ with `vp exec`.
 
 ```bash
 pnpm --filter @spences10/pi-lsp run check

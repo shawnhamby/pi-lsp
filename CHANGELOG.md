@@ -1,5 +1,16 @@
 # @spences10/pi-lsp
 
+## 0.0.26
+
+### Patch Changes
+
+- a040ea3: Standardize package scripts through Vite+ and refresh
+  README badges/development guidance across published packages.
+- Updated dependencies [a040ea3]
+  - @spences10/pi-project-trust@0.0.8
+  - @spences10/pi-child-env@0.1.6
+  - @spences10/pi-tui-modal@0.0.17
+
 ## 0.0.25
 
 ### Patch Changes

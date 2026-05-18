@@ -4,8 +4,8 @@
 
 ### Patch Changes
 
-- 599b355: Improve package README openings and descriptions to emphasize user
-  benefits and clarify pi-skills/pi-recall positioning.
+- 599b355: Improve package README openings and descriptions to
+  emphasize user benefits and clarify pi-skills/pi-recall positioning.
 - Updated dependencies [599b355]
   - @spences10/pi-project-trust@0.0.9
   - @spences10/pi-child-env@0.1.7

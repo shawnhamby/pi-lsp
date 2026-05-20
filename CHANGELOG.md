@@ -1,5 +1,12 @@
 # @spences10/pi-lsp
 
+## 0.0.29
+
+### Patch Changes
+
+- b89b3c6: Fix stale LSP diagnostics cache after document changes so
+  fresh diagnostics are awaited correctly.
+
 ## 0.0.28
 
 ### Patch Changes

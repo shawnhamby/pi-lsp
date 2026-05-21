@@ -259,6 +259,19 @@ export class LspClient extends EventEmitter {
 		});
 	}
 
+	async close_document(uri: string): Promise<void> {
+		if (!this.#open_docs.has(uri)) return;
+		this.#open_docs.delete(uri);
+		this.#diagnostics_by_uri.delete(uri);
+		this.#notify('textDocument/didClose', {
+			textDocument: { uri },
+		});
+	}
+
+	open_document_count(): number {
+		return this.#open_docs.size;
+	}
+
 	async hover(
 		uri: string,
 		position: LspPosition,

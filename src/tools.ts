@@ -91,6 +91,8 @@ async function with_file_state(
 				error,
 			),
 		);
+	} finally {
+		await manager.release_file_state(result);
 	}
 }
 
@@ -194,6 +196,8 @@ export function register_lsp_tools(
 								diagnostics: 0,
 								error: true,
 							};
+						} finally {
+							await manager.release_file_state(resolved.result);
 						}
 					},
 				);

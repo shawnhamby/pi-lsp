@@ -13,10 +13,12 @@ import {
 } from './servers.js';
 
 export interface LspFormatServerState {
-	client: { is_ready(): boolean };
+	client: { is_ready(): boolean; open_document_count?(): number };
 	language: string;
 	workspace_root: string;
 	command: string;
+	active_request_count?: number;
+	last_used_at?: number;
 }
 
 export interface LspToolErrorDetails {
@@ -98,10 +100,20 @@ function format_running_server_lines(
 				a.language.localeCompare(b.language) ||
 				a.workspace_root.localeCompare(b.workspace_root),
 		)
-		.map(
-			(state) =>
-				`${state.language}: running (ready=${state.client.is_ready()}) — ${state.command} [workspace ${state.workspace_root}]`,
-		);
+		.map((state) => format_running_server_line(state));
+}
+
+function format_running_server_line(
+	state: LspFormatServerState,
+): string {
+	const open_documents =
+		state.client.open_document_count?.() ??
+		state.active_request_count ??
+		0;
+	const idle_suffix = state.last_used_at
+		? `, idle=${Math.max(0, Math.round((Date.now() - state.last_used_at) / 1000))}s`
+		: '';
+	return `${state.language}: running (ready=${state.client.is_ready()}, open_docs=${open_documents}, active=${state.active_request_count ?? 0}${idle_suffix}) — ${state.command} [workspace ${state.workspace_root}]`;
 }
 
 function format_failed_server_lines(
@@ -137,9 +149,7 @@ export function format_status_lines(
 	);
 	for (const running of running_states) {
 		active_languages.add(running.language);
-		lines.push(
-			`${running.language}: running (ready=${running.client.is_ready()}) — ${running.command} [workspace ${running.workspace_root}]`,
-		);
+		lines.push(format_running_server_line(running));
 	}
 
 	const failures = Array.from(failed_servers.values()).sort(

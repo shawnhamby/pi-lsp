@@ -11,6 +11,8 @@ export function create_mock_client(
 		stop: vi.fn().mockResolvedValue(undefined),
 		is_ready: vi.fn().mockReturnValue(true),
 		ensure_document_open: vi.fn().mockResolvedValue(undefined),
+		close_document: vi.fn().mockResolvedValue(undefined),
+		open_document_count: vi.fn().mockReturnValue(0),
 		hover: vi.fn().mockResolvedValue(null),
 		definition: vi.fn().mockResolvedValue([]),
 		references: vi.fn().mockResolvedValue([]),

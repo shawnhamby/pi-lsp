@@ -35,7 +35,7 @@ describe('lsp command', () => {
 		});
 		await commands.get('lsp').handler('status', ctx);
 		expect(notifications.pop()?.message).toContain(
-			'typescript: running (ready=true) — typescript-language-server',
+			'typescript: running (ready=true, open_docs=0, active=0',
 		);
 
 		await commands.get('lsp').handler('restart typescript', ctx);

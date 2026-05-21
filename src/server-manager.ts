@@ -37,6 +37,8 @@ export interface LspClientLike {
 	stop(): Promise<void>;
 	is_ready(): boolean;
 	ensure_document_open(uri: string, text: string): Promise<void>;
+	close_document(uri: string): Promise<void>;
+	open_document_count?(): number;
 	hover(uri: string, position: LspPosition): Promise<LspHover | null>;
 	definition(
 		uri: string,
@@ -56,11 +58,16 @@ export interface LspClientLike {
 
 export interface ServerState {
 	client: LspClientLike;
+	key: string;
 	language: string;
 	workspace_root: string;
 	root_uri: string;
 	command: string;
 	install_hint?: string;
+	active_request_count: number;
+	last_used_at?: number;
+	open_documents: Map<string, number>;
+	idle_timer?: NodeJS.Timeout;
 }
 
 interface StartingServerState {
@@ -82,6 +89,7 @@ export interface CreateLspServerManagerOptions {
 	create_client?: (options: LspClientOptions) => LspClientLike;
 	read_file?: (path: string) => Promise<string>;
 	cwd?: () => string;
+	idle_timeout_ms?: number;
 }
 
 class LspStartupCancelledError extends Error {
@@ -137,6 +145,7 @@ export class LspServerManager {
 	) => LspClientLike;
 	readonly #read_file: (path: string) => Promise<string>;
 	readonly #starting_servers = new Map<string, StartingServerState>();
+	readonly #idle_timeout_ms?: number;
 
 	constructor(options: CreateLspServerManagerOptions = {}) {
 		this.cwd = options.cwd?.() ?? process.cwd();
@@ -147,6 +156,17 @@ export class LspServerManager {
 		this.#read_file =
 			options.read_file ??
 			((path: string) => readFile(path, 'utf-8'));
+		const env_idle_timeout = process.env.MY_PI_LSP_IDLE_TIMEOUT_MS
+			? Number(process.env.MY_PI_LSP_IDLE_TIMEOUT_MS)
+			: undefined;
+		const idle_timeout_ms =
+			options.idle_timeout_ms ?? env_idle_timeout;
+		this.#idle_timeout_ms =
+			idle_timeout_ms &&
+			Number.isFinite(idle_timeout_ms) &&
+			idle_timeout_ms > 0
+				? idle_timeout_ms
+				: undefined;
 	}
 
 	resolve_abs(file: string): string {
@@ -169,7 +189,10 @@ export class LspServerManager {
 			this.#starting_servers.delete(key);
 		}
 		await Promise.allSettled(
-			states.map(([, state]) => state.client.stop()),
+			states.map(([, state]) => {
+				this.#clear_idle_timer(state);
+				return state.client.stop();
+			}),
 		);
 		for (const [key] of states) {
 			this.clients_by_server.delete(key);
@@ -220,6 +243,23 @@ export class LspServerManager {
 		}
 	}
 
+	async release_file_state(file_state: FileState): Promise<void> {
+		const { state, uri } = file_state;
+		const count = state.open_documents.get(uri) ?? 0;
+		if (count <= 1) {
+			state.open_documents.delete(uri);
+			await state.client.close_document(uri);
+		} else {
+			state.open_documents.set(uri, count - 1);
+		}
+		state.active_request_count = Math.max(
+			0,
+			state.active_request_count - 1,
+		);
+		state.last_used_at = Date.now();
+		this.#schedule_idle_stop(state);
+	}
+
 	async #get_file_state(
 		file: string,
 		ctx?: ExtensionContext,
@@ -227,8 +267,23 @@ export class LspServerManager {
 		const abs = this.resolve_abs(file);
 		const state = await this.#get_or_start_client(abs, ctx);
 		if (!state) return undefined;
-		const uri = await this.#open_file(state, abs);
-		return { abs, uri, state };
+		this.#clear_idle_timer(state);
+		state.active_request_count += 1;
+		try {
+			const uri = await this.#open_file(state, abs);
+			state.open_documents.set(
+				uri,
+				(state.open_documents.get(uri) ?? 0) + 1,
+			);
+			return { abs, uri, state };
+		} catch (error) {
+			state.active_request_count = Math.max(
+				0,
+				state.active_request_count - 1,
+			);
+			this.#schedule_idle_stop(state);
+			throw error;
+		}
 	}
 
 	async #get_or_start_client(
@@ -299,11 +354,15 @@ export class LspServerManager {
 
 			const state: ServerState = {
 				client,
+				key,
 				language,
 				workspace_root,
 				root_uri,
 				command: server_config.command,
 				install_hint: server_config.install_hint,
+				active_request_count: 0,
+				last_used_at: Date.now(),
+				open_documents: new Map(),
 			};
 			this.clients_by_server.set(key, state);
 			this.failed_servers.delete(key);
@@ -329,5 +388,32 @@ export class LspServerManager {
 		const uri = file_path_to_uri(abs_path);
 		await state.client.ensure_document_open(uri, text);
 		return uri;
+	}
+
+	#clear_idle_timer(state: ServerState): void {
+		if (!state.idle_timer) return;
+		clearTimeout(state.idle_timer);
+		state.idle_timer = undefined;
+	}
+
+	#schedule_idle_stop(state: ServerState): void {
+		this.#clear_idle_timer(state);
+		if (!this.#idle_timeout_ms) return;
+		state.idle_timer = setTimeout(() => {
+			if (
+				state.active_request_count > 0 ||
+				Date.now() - (state.last_used_at ?? 0) <
+					this.#idle_timeout_ms!
+			) {
+				this.#schedule_idle_stop(state);
+				return;
+			}
+			void (async () => {
+				this.#clear_idle_timer(state);
+				await state.client.stop();
+				this.clients_by_server.delete(state.key);
+			})();
+		}, this.#idle_timeout_ms);
+		state.idle_timer.unref?.();
 	}
 }

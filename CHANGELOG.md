@@ -1,5 +1,12 @@
 # @spences10/pi-lsp
 
+## 0.0.30
+
+### Patch Changes
+
+- bad3580: Close one-shot LSP documents and stop idle servers to
+  reduce retained memory.
+
 ## 0.0.29
 
 ### Patch Changes

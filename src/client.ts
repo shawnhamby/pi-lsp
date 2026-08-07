@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { create_child_process_env } from './env.js';
 
 export interface LspPosition {
@@ -42,6 +42,17 @@ export interface LspDiagnostic {
 	code?: string | number;
 	source?: string;
 	message: string;
+}
+
+export interface LspDiagnosticsSnapshot {
+	revision: number;
+	by_uri: Map<string, LspDiagnostic[]>;
+}
+
+export interface LspDiagnosticsWaitOptions {
+	after_revision?: number;
+	settle_ms?: number;
+	signal?: AbortSignal;
 }
 
 export interface LspHover {
@@ -115,6 +126,7 @@ export class LspClient extends EventEmitter {
 	#initialized = false;
 	#open_docs = new Map<string, { version: number; text: string }>();
 	#diagnostics_by_uri = new Map<string, LspDiagnostic[]>();
+	#diagnostics_revision = 0;
 	#diagnostic_waiters = new Set<() => void>();
 
 	constructor(options: LspClientOptions) {
@@ -334,30 +346,88 @@ export class LspClient extends EventEmitter {
 		return this.#diagnostics_by_uri.get(uri) ?? [];
 	}
 
+	diagnostics_snapshot(): LspDiagnosticsSnapshot {
+		return {
+			revision: this.#diagnostics_revision,
+			by_uri: new Map(
+				Array.from(this.#diagnostics_by_uri, ([uri, diagnostics]) => [
+					uri,
+					[...diagnostics],
+				]),
+			),
+		};
+	}
+
+	notify_watched_file(uri: string, change_type: 1 | 2 | 3): void {
+		this.#notify('workspace/didChangeWatchedFiles', {
+			changes: [{ uri, type: change_type }],
+		});
+	}
+
 	async wait_for_diagnostics(
 		uri: string,
 		timeout_ms = 1500,
+		options: LspDiagnosticsWaitOptions = {},
 	): Promise<LspDiagnostic[]> {
-		if (this.#diagnostics_by_uri.has(uri)) {
+		const is_fresh = () =>
+			options.after_revision === undefined ||
+			this.#diagnostics_revision > options.after_revision;
+		if (
+			this.#diagnostics_by_uri.has(uri) &&
+			is_fresh() &&
+			!options.settle_ms
+		) {
 			return this.get_diagnostics(uri);
 		}
-		return new Promise((resolve) => {
+		return new Promise((resolve, reject) => {
 			let active = true;
+			let target_seen = false;
+			let settle_timer: NodeJS.Timeout | undefined;
 			const cleanup = () => {
 				if (!active) return;
 				active = false;
 				this.off('diagnostics', handler);
 				clearTimeout(timer);
+				if (settle_timer) clearTimeout(settle_timer);
+				options.signal?.removeEventListener('abort', abort);
 				this.#diagnostic_waiters.delete(cleanup);
 				resolve(this.get_diagnostics(uri));
 			};
+			const abort = () => {
+				if (!active) return;
+				active = false;
+				this.off('diagnostics', handler);
+				clearTimeout(timer);
+				if (settle_timer) clearTimeout(settle_timer);
+				options.signal?.removeEventListener('abort', abort);
+				this.#diagnostic_waiters.delete(cleanup);
+				reject(options.signal?.reason ?? new Error('LSP diagnostics aborted'));
+			};
 			const handler = (event_uri: string) => {
-				if (event_uri !== uri) return;
-				cleanup();
+				if (!is_fresh()) return;
+				if (event_uri === uri) target_seen = true;
+				if (!target_seen) return;
+				if (!options.settle_ms) {
+					cleanup();
+					return;
+				}
+				if (settle_timer) clearTimeout(settle_timer);
+				settle_timer = setTimeout(cleanup, options.settle_ms);
 			};
 			const timer = setTimeout(cleanup, timeout_ms);
 			this.on('diagnostics', handler);
 			this.#diagnostic_waiters.add(cleanup);
+			if (options.signal?.aborted) {
+				abort();
+				return;
+			}
+			options.signal?.addEventListener('abort', abort, { once: true });
+			if (
+				options.after_revision === undefined &&
+				this.#diagnostics_by_uri.has(uri)
+			) {
+				handler(uri);
+			}
 		});
 	}
 
@@ -500,6 +570,7 @@ export class LspClient extends EventEmitter {
 				diagnostics: LspDiagnostic[];
 			};
 			this.#diagnostics_by_uri.set(params.uri, params.diagnostics);
+			this.#diagnostics_revision += 1;
 			this.emit('diagnostics', params.uri);
 			return;
 		}
@@ -570,6 +641,10 @@ export function normalize_document_symbol_result(
 
 export function file_path_to_uri(file_path: string): string {
 	return pathToFileURL(file_path).href;
+}
+
+export function file_uri_to_path(uri: string): string {
+	return fileURLToPath(uri);
 }
 
 function error_code(error: unknown): string | undefined {

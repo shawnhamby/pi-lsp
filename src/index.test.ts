@@ -48,6 +48,8 @@ describe('lsp extension wiring', () => {
 		);
 		expect(commands.has('lsp')).toBe(true);
 		expect(events.has('before_agent_start')).toBe(true);
+		expect(events.has('tool_call')).toBe(true);
+		expect(events.has('tool_result')).toBe(true);
 		expect(events.has('session_shutdown')).toBe(true);
 	});
 });

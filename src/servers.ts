@@ -31,6 +31,44 @@ const EXTENSION_LANGUAGES: Record<string, string> = {
 	'.java': 'java',
 	'.lua': 'lua',
 	'.svelte': 'svelte',
+	'.c': 'clangd',
+	'.cc': 'clangd',
+	'.cpp': 'clangd',
+	'.cxx': 'clangd',
+	'.h': 'clangd',
+	'.hh': 'clangd',
+	'.hpp': 'clangd',
+	'.m': 'clangd',
+	'.mm': 'clangd',
+	'.swift': 'swift',
+};
+
+const EXTENSION_LANGUAGE_IDS: Record<string, string> = {
+	'.ts': 'typescript',
+	'.tsx': 'typescriptreact',
+	'.mts': 'typescript',
+	'.cts': 'typescript',
+	'.js': 'javascript',
+	'.jsx': 'javascriptreact',
+	'.mjs': 'javascript',
+	'.cjs': 'javascript',
+	'.py': 'python',
+	'.rs': 'rust',
+	'.go': 'go',
+	'.rb': 'ruby',
+	'.java': 'java',
+	'.lua': 'lua',
+	'.svelte': 'svelte',
+	'.c': 'c',
+	'.cc': 'cpp',
+	'.cpp': 'cpp',
+	'.cxx': 'cpp',
+	'.h': 'c',
+	'.hh': 'cpp',
+	'.hpp': 'cpp',
+	'.m': 'objective-c',
+	'.mm': 'objective-cpp',
+	'.swift': 'swift',
 };
 
 const LANGUAGE_SERVERS: Record<string, LspServerConfig> = {
@@ -43,10 +81,10 @@ const LANGUAGE_SERVERS: Record<string, LspServerConfig> = {
 	},
 	python: {
 		language: 'python',
-		command: 'pylsp',
-		args: [],
+		command: 'pyright-langserver',
+		args: ['--stdio'],
 		install_hint:
-			'Install Python LSP with: pip install python-lsp-server',
+			'Install Pyright and ensure pyright-langserver is on PATH.',
 	},
 	rust: {
 		language: 'rust',
@@ -89,6 +127,20 @@ const LANGUAGE_SERVERS: Record<string, LspServerConfig> = {
 		install_hint:
 			'Install Svelte LSP with: pnpm add -D svelte-language-server (or volta install svelte-language-server)',
 	},
+	clangd: {
+		language: 'clangd',
+		command: 'clangd',
+		args: [],
+		install_hint:
+			'Install clangd and ensure the clangd binary is on PATH.',
+	},
+	swift: {
+		language: 'swift',
+		command: 'sourcekit-lsp',
+		args: [],
+		install_hint:
+			'Install the Swift toolchain and ensure sourcekit-lsp is on PATH.',
+	},
 };
 
 const WORKSPACE_MARKERS = [
@@ -104,6 +156,9 @@ const WORKSPACE_MARKERS = [
 	'pom.xml',
 	'build.gradle',
 	'build.gradle.kts',
+	'compile_commands.json',
+	'CMakeLists.txt',
+	'Package.swift',
 ];
 
 const REPOSITORY_MARKERS = [
@@ -177,7 +232,7 @@ export function get_server_config(
 export function language_id_for_file(
 	file_path: string,
 ): string | undefined {
-	return detect_language(file_path);
+	return EXTENSION_LANGUAGE_IDS[extname(file_path).toLowerCase()];
 }
 
 export function find_workspace_root(

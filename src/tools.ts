@@ -340,6 +340,10 @@ export function register_lsp_tools(
 							character: params.character,
 						},
 					);
+					await manager.validate_result_uris(
+						locations.map((location) => location.uri),
+						result.state.workspace_root,
+					);
 					return format_locations(locations, 'No definition found.');
 				}),
 		}),
@@ -366,6 +370,10 @@ export function register_lsp_tools(
 							character: params.character,
 						},
 						params.include_declaration ?? true,
+					);
+					await manager.validate_result_uris(
+						locations.map((location) => location.uri),
+						result.state.workspace_root,
 					);
 					return format_locations(locations, 'No references found.');
 				}),

@@ -8,7 +8,6 @@ import {
 } from '@spences10/pi-tui-modal';
 import { format_lsp_view, format_status_lines } from './format.js';
 import { LspServerManager } from './server-manager.js';
-import { list_supported_languages } from './servers.js';
 
 export function register_lsp_command(
 	pi: ExtensionAPI,
@@ -32,7 +31,7 @@ export function register_lsp_command(
 			}
 			if (parts[0] === 'restart') {
 				const candidate = parts[1] ?? '';
-				return ['all', ...list_supported_languages()]
+				return ['all', ...manager.list_supported_languages()]
 					.filter((value) => value.startsWith(candidate))
 					.map((value) => ({
 						value: `restart ${value}`,
@@ -107,9 +106,9 @@ export async function handle_lsp_command(
 				ctx.ui.notify('Restarted all language server state.');
 				return;
 			}
-			if (!list_supported_languages().includes(target)) {
+			if (!manager.list_supported_languages().includes(target)) {
 				ctx.ui.notify(
-					`Unknown language: ${target}. Use one of: ${list_supported_languages().join(', ')}`,
+					`Unknown language: ${target}. Use one of: ${manager.list_supported_languages().join(', ')}`,
 					'warning',
 				);
 				return;
@@ -150,7 +149,7 @@ async function show_lsp_home_modal(
 	const failed_count = manager.failed_servers.size;
 	return await show_picker_modal(ctx, {
 		title: 'Language servers',
-		subtitle: `${running_count} running • ${failed_count} failed • ${list_supported_languages().length} supported`,
+		subtitle: `${running_count} running • ${failed_count} failed • ${manager.list_supported_languages().length} supported`,
 		items: [
 			{
 				value: 'status',
@@ -203,7 +202,7 @@ async function handle_lsp_restart_modal(
 				label: 'All servers',
 				description: 'Stop every running language server',
 			},
-			...list_supported_languages().map((language) => ({
+			...manager.list_supported_languages().map((language) => ({
 				value: language,
 				label: language,
 				description: `Restart ${language} language server state`,

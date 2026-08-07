@@ -50,6 +50,10 @@ export function create_test_pi() {
 	>();
 	const commands = new RequiredMap<string, { handler: Function }>();
 	const events = new RequiredMap<string, Function>();
+	const messages: Array<{
+		message: unknown;
+		options: unknown;
+	}> = [];
 
 	const pi = {
 		registerTool(definition: {
@@ -66,9 +70,12 @@ export function create_test_pi() {
 		on(name: string, handler: Function) {
 			events.set(name, handler);
 		},
+		sendMessage(message: unknown, options: unknown) {
+			messages.push({ message, options });
+		},
 	} as unknown as ExtensionAPI;
 
-	return { pi, tools, commands, events };
+	return { pi, tools, commands, events, messages };
 }
 
 export async function register_test_lsp_extension(

@@ -1,99 +1,89 @@
-# @spences10/pi-lsp
+# @shawnhamby/pi-lsp
 
-<!-- package-readme:header:start -->
+Language Server Protocol tools and bounded inline diagnostics for the
+[Pi coding agent](https://pi.dev). This is a focused fork of
+[`@spences10/pi-lsp`](https://github.com/spences10/my-pi/tree/main/packages/pi-lsp)
+that retains its secure language-server process handling and adds an
+OMP-style diagnostic feedback loop after file mutations.
 
-[![built with Vite+](https://img.shields.io/badge/built%20with-Vite+-646CFF?logo=vite&logoColor=white)](https://viteplus.dev)
-[![tested with Vitest](https://img.shields.io/badge/tested%20with-Vitest-6E9F18?logo=vitest&logoColor=white)](https://vitest.dev)
-[![npm version](https://img.shields.io/npm/v/@spences10/pi-lsp?color=CB3837&logo=npm&logoColor=white)](https://www.npmjs.com/package/@spences10/pi-lsp)
-[![license](https://img.shields.io/npm/l/@spences10/pi-lsp)](https://www.npmjs.com/package/@spences10/pi-lsp)
+## Install
 
-![my-pi package preview](https://raw.githubusercontent.com/spences10/my-pi/main/assets/pi-package-preview.png)
-
-<!-- package-readme:header:end -->
-
-Give agents precise code intelligence instead of guesswork. `pi-lsp`
-exposes language-server diagnostics, hovers, definitions, references,
-and symbols as Pi tools so models can validate edits and navigate
-typed codebases accurately.
-
-The hover, definition, and document-symbol tools prefer Pi's strict
-JSON Schema sampling with closed, fully required schemas. LSP tools
-with optional arguments use normal tool calling for provider
-portability.
-
-## Installation
-
-<!-- package-readme:install:start -->
+Install the Git repository directly:
 
 ```bash
-pi install npm:@spences10/pi-lsp
+pi install git:github.com/shawnhamby/pi-lsp
 ```
 
-<!-- package-readme:install:end -->
+The repository's reviewed `main` branch is the release channel. Fork
+maintenance and pushes happen outside Pi; Pi only loads or refreshes the Git
+package.
 
-Local development from this monorepo:
+For local development or a one-run smoke test:
 
 ```bash
-pnpm --filter @spences10/pi-lsp run build
-pi install ./packages/pi-lsp
-# or for one run only
-pi -e ./packages/pi-lsp
+pi -e /absolute/path/to/pi-lsp
 ```
 
-## Required language servers
+Pi loads the checked-in TypeScript extension directly for Git installs. The
+compiled `dist` entry remains available to package consumers.
 
-This package talks to language-server binaries installed in your
-project or on `PATH`. For TypeScript, JavaScript, and Svelte projects:
+## What it provides
 
-```bash
-pnpm add -D typescript typescript-language-server svelte-language-server
+The extension registers tools for:
+
+- diagnostics, including batched diagnostics;
+- hover information;
+- definitions and references;
+- document symbols.
+
+It also watches successful Pi `write` operations by default. Fresh errors and
+warnings that arrive within 500 ms are appended to the tool result. Slower
+diagnostics may arrive for up to 12 seconds as a non-turn-triggering steering
+message. Newer edits supersede older pending diagnostics, unchanged findings
+are deduplicated, clean results stay silent, and watched-file notifications keep
+language servers current when files are created or changed.
+
+Automatic diagnostics after `edit` are off by default because frequent patch
+operations can create noisy intermediate states. A custom harness can enable
+them:
+
+```ts
+import { create_lsp_extension } from '@shawnhamby/pi-lsp';
+
+export default create_lsp_extension({
+  diagnostics_on_write: true,
+  diagnostics_on_edit: true,
+  inline_budget_ms: 500,
+  deferred_budget_ms: 12_000,
+  settle_ms: 200,
+});
 ```
 
-Supported server discovery includes:
+## Language servers
 
-- TypeScript / JavaScript via `typescript-language-server`
-- Svelte via `svelteserver`
-- Python via `python-lsp-server`
-- Go via `gopls`
-- Rust via `rust-analyzer`
-- Ruby via `solargraph`
-- Java via `jdtls`
-- Lua via `lua-language-server`
+The fork discovers these installed servers; it never installs a server or
+executes a repository-controlled binary without the inherited trust check.
 
-Project-local binaries in `node_modules/.bin` are detected before
-global binaries, but are untrusted by default because they can execute
-repo-controlled code. Interactive sessions prompt before starting a
-project-local binary; headless sessions fall back to the global `PATH`
-binary unless `MY_PI_LSP_PROJECT_BINARY=allow` or
-`MY_PI_LSP_PROJECT_BINARY=trust` is set. `/lsp status` shows the
-resolved binary path for running and idle servers.
+| Languages | Server |
+| --- | --- |
+| TypeScript, JavaScript | `typescript-language-server` |
+| Svelte | `svelteserver` |
+| Python | `pyright-langserver` |
+| Go | `gopls` |
+| Rust | `rust-analyzer` |
+| C, C++, Objective-C | `clangd` |
+| Swift | `sourcekit-lsp` |
+| Ruby | `solargraph` |
+| Java | `jdtls` |
+| Lua | `lua-language-server` |
 
-Language servers receive a restricted child-process environment by
-default. Use `MY_PI_LSP_ENV_ALLOWLIST=NAME,OTHER_NAME` or the shared
-`MY_PI_CHILD_ENV_ALLOWLIST` to pass selected ambient variables
-through.
-
-## Tools
-
-The extension registers LSP-backed Pi tools for:
-
-- diagnostics
-- hover
-- definitions
-- references
-- document symbols
-
-These tools let the model inspect types, find usages, and catch
-diagnostics without guessing from text search alone.
-
-## Model reminder
-
-When LSP tools are active, the extension injects a small system prompt
-reminder telling the model to use LSP for focused diagnostics, type
-and symbol questions, definitions, references, and validation before
-reporting completion. It also reminds the model to run diagnostics on
-changed language-server-supported files before completion or commit,
-preferring `lsp_diagnostics_many` for batches.
+Project-local binaries in `node_modules/.bin` are resolved before global
+binaries. They are untrusted by default because repositories can control them.
+Interactive sessions ask before execution; headless sessions skip them unless
+`MY_PI_LSP_PROJECT_BINARY=allow` or `MY_PI_LSP_PROJECT_BINARY=trust` is set.
+Language-server child processes receive a restricted environment. Additional
+variables can be admitted through `MY_PI_LSP_ENV_ALLOWLIST` or the shared
+`MY_PI_CHILD_ENV_ALLOWLIST`.
 
 ## Commands
 
@@ -104,47 +94,34 @@ preferring `lsp_diagnostics_many` for batches.
 /lsp restart <language>
 ```
 
-Use `/lsp status` to inspect active clients and `/lsp restart` after
-dependency installs or language-server crashes.
+## Custom harness options
 
-## Using from a custom harness
+`create_lsp_extension` accepts callbacks for language detection, workspace-root
+selection, server configuration, supported-language reporting, file-path
+authorization, and returned-URI validation. The defaults confine tool targets
+to the current working directory and definition/reference results to the
+resolved workspace root. Normal Pi installations load the package entry
+directly and do not need any workspace wrapper.
 
-```ts
-import lsp from '@spences10/pi-lsp';
-
-// pass `lsp` as an ExtensionFactory to your Pi runtime
-```
-
-For harnesses that need to provide their own language-server client
-factory, use the named extension factory:
-
-```ts
-import { create_lsp_extension } from '@spences10/pi-lsp';
-
-const lsp = create_lsp_extension({ create_client });
-```
-
-The package also exports `CreateLspExtensionOptions`,
-`should_inject_lsp_prompt`, and `LspClientLike` for custom harnesses
-and tests that need to share the same prompt-gating or client seam.
-
-`my-pi` imports this package directly and enables it as the built-in
-LSP extension.
+The package exports `CreateLspExtensionOptions`,
+`CreateLspServerManagerOptions`, `LspServerConfig`, `LspClientLike`, mutation
+diagnostic types, and diagnostic snapshot/wait types for custom harnesses.
 
 ## Development
 
-<!-- package-readme:development:start commands="check,test,build" -->
-
-Package scripts build transitive workspace dependencies first, then
-run local tools through Vite+ with `vp exec`.
-
 ```bash
-pnpm --filter @spences10/pi-lsp run check
-pnpm --filter @spences10/pi-lsp run test
-pnpm --filter @spences10/pi-lsp run build
+pnpm install --ignore-scripts
+pnpm run check
+pnpm run test
+pnpm run build
 ```
 
-<!-- package-readme:development:end -->
+## Attribution
+
+The original implementation is Copyright Scott Spence and contributors and is
+used under the MIT License. See [NOTICE.md](NOTICE.md) for the fork baseline and
+attribution details. See [UPSTREAM.md](UPSTREAM.md) for the agent-managed
+upstream update and Git-refresh process.
 
 ## License
 

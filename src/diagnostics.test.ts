@@ -38,7 +38,7 @@ describe('lsp diagnostics tools', () => {
 		const { tools } = await create_test_lsp_extension({
 			create_client: () => client,
 			read_file: async () => '<script lang="ts">\n</script>\n',
-			cwd: () => '/repo',
+			cwd: () => '/workspace',
 		});
 
 		const result = await tools.get('lsp_diagnostics').execute('1', {

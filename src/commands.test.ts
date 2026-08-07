@@ -110,6 +110,7 @@ describe('lsp command', () => {
 			undefined,
 			ctx,
 		);
+		await vi.waitFor(() => expect(create_client).toHaveBeenCalledTimes(1));
 
 		await commands.get('lsp').handler('restart typescript', ctx);
 		startup.resolve();

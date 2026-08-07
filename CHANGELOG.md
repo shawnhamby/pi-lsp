@@ -1,4 +1,26 @@
-# @spences10/pi-lsp
+# @shawnhamby/pi-lsp
+
+## 0.1.0
+
+### Added
+
+- Bounded post-write diagnostics with a 500 ms inline budget and a 12 second
+  deferred budget.
+- Mutation-version cancellation, diagnostic deduplication, watched-file
+  notifications, related-file freshness, and silent clean/stale results.
+- Harness policy seams for server configuration, workspace resolution, path
+  authorization, and returned-URI validation.
+- Pyright, clangd, and sourcekit-lsp discovery.
+
+### Changed
+
+- Extracted the package into the standalone `shawnhamby/pi-lsp` fork while
+  preserving upstream MIT attribution.
+- Python discovery now uses `pyright-langserver`.
+
+## Upstream history
+
+The entries below predate the standalone fork.
 
 ## 0.0.44
 

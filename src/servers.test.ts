@@ -11,6 +11,7 @@ import {
 	detect_language,
 	find_workspace_root,
 	get_server_config,
+	language_id_for_file,
 	list_supported_languages,
 	resolve_server_command,
 	resolve_server_command_info,
@@ -29,6 +30,9 @@ describe('detect_language', () => {
 		expect(detect_language('file.ts')).toBe('typescript');
 		expect(detect_language('component.svelte')).toBe('svelte');
 		expect(detect_language('main.py')).toBe('python');
+		expect(detect_language('main.cpp')).toBe('clangd');
+		expect(language_id_for_file('main.cpp')).toBe('cpp');
+		expect(language_id_for_file('view.mm')).toBe('objective-cpp');
 	});
 
 	it('returns undefined for unknown extensions', () => {
@@ -39,6 +43,7 @@ describe('detect_language', () => {
 describe('list_supported_languages', () => {
 	it('includes the built-in language set', () => {
 		expect(list_supported_languages()).toEqual([
+			'clangd',
 			'go',
 			'java',
 			'lua',
@@ -46,6 +51,7 @@ describe('list_supported_languages', () => {
 			'ruby',
 			'rust',
 			'svelte',
+			'swift',
 			'typescript',
 		]);
 	});

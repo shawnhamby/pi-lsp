@@ -245,7 +245,7 @@ describe('lsp server manager', () => {
 		await register_test_lsp_extension(pi, {
 			create_client,
 			read_file: async () => '<script lang="ts">\n</script>\n',
-			cwd: () => '/repo/not-the-target',
+			cwd: () => root,
 		});
 
 		await tools.get('lsp_hover').execute(

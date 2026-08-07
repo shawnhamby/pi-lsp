@@ -23,14 +23,62 @@ import {
 } from './server-manager.js';
 
 const DIAGNOSTICS_MANY_CONCURRENCY = 8;
+const INTERNAL_DETAILS_KEY = Symbol.for('pi.internal-details-expanded');
 const HIDDEN_TOOL_COMPONENT = {
 	render: () => [],
 	invalidate: () => {},
 };
+
+type RenderTheme = {
+	fg(color: string, text: string): string;
+};
+
+function internal_details_expanded(): boolean {
+	return Boolean(
+		(process as unknown as Record<symbol, unknown>)[INTERNAL_DETAILS_KEY],
+	);
+}
+
+function result_text(result: unknown): string {
+	if (!result || typeof result !== 'object' || !('content' in result)) return '';
+	const content = (result as { content?: unknown }).content;
+	if (!Array.isArray(content)) return '';
+	return content
+		.filter(
+			(item): item is { type: 'text'; text: string } =>
+				Boolean(
+					item &&
+						typeof item === 'object' &&
+						(item as { type?: unknown }).type === 'text' &&
+						typeof (item as { text?: unknown }).text === 'string',
+				),
+		)
+		.map((item) => item.text)
+		.join('\n');
+}
+
+function internal_result_component(result: unknown, theme: RenderTheme) {
+	const text = result_text(result);
+	return {
+		render(width: number): string[] {
+			if (!internal_details_expanded() || !text) return [];
+			const available = Math.max(1, Math.floor(width) - 2);
+			const lines = text.split('\n').map((line) => line.slice(0, available));
+			const first = lines.shift() ?? '';
+			return [
+				`${theme.fg('warning', '◆ LSP')} ${theme.fg('muted', first)}`,
+				...lines.map((line) => theme.fg('muted', `  ${line}`)),
+			];
+		},
+		invalidate: () => {},
+	};
+}
+
 const HIDDEN_TOOL_RENDERING = {
 	renderShell: 'self' as const,
 	renderCall: () => HIDDEN_TOOL_COMPONENT,
-	renderResult: () => HIDDEN_TOOL_COMPONENT,
+	renderResult: (result: unknown, _options: unknown, theme: RenderTheme) =>
+		internal_result_component(result, theme),
 };
 
 function make_tool_result(text: string, details: unknown = {}) {

@@ -374,7 +374,7 @@ export class LspClient extends EventEmitter {
 			this.#diagnostics_revision > options.after_revision;
 		if (
 			this.#diagnostics_by_uri.has(uri) &&
-			is_fresh() &&
+			options.after_revision === undefined &&
 			!options.settle_ms
 		) {
 			return this.get_diagnostics(uri);
@@ -391,7 +391,11 @@ export class LspClient extends EventEmitter {
 				if (settle_timer) clearTimeout(settle_timer);
 				options.signal?.removeEventListener('abort', abort);
 				this.#diagnostic_waiters.delete(cleanup);
-				resolve(this.get_diagnostics(uri));
+				resolve(
+					options.after_revision !== undefined && !target_seen
+						? []
+						: this.get_diagnostics(uri),
+				);
 			};
 			const abort = () => {
 				if (!active) return;
@@ -568,7 +572,16 @@ export class LspClient extends EventEmitter {
 			const params = message.params as {
 				uri: string;
 				diagnostics: LspDiagnostic[];
+				version?: number;
 			};
+			const open_document = this.#open_docs.get(params.uri);
+			if (
+				params.version !== undefined &&
+				open_document &&
+				params.version < open_document.version
+			) {
+				return;
+			}
 			this.#diagnostics_by_uri.set(params.uri, params.diagnostics);
 			this.#diagnostics_revision += 1;
 			this.emit('diagnostics', params.uri);

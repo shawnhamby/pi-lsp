@@ -367,7 +367,9 @@ export class LspServerManager {
 		options: MutationDiagnosticsOptions,
 	): Promise<MutationDiagnosticsResult> {
 		const abs = this.resolve_abs(file);
+		let state: ServerState | undefined;
 		let file_state: FileState | undefined;
+		let request_started = false;
 		try {
 			if (!(await this.is_path_allowed(abs))) {
 				return {
@@ -379,7 +381,7 @@ export class LspServerManager {
 					},
 				};
 			}
-			const state = await this.#get_or_start_client(abs, ctx);
+			state = await this.#get_or_start_client(abs, ctx);
 			if (!state) {
 				return {
 					ok: false,
@@ -393,8 +395,8 @@ export class LspServerManager {
 
 			this.#clear_idle_timer(state);
 			state.active_request_count += 1;
+			request_started = true;
 			const uri = file_path_to_uri(abs);
-			file_state = { abs, uri, state };
 			const before = state.client.diagnostics_snapshot?.();
 			this.#notify_running_clients(abs, change_type);
 			const text = await this.#read_file(abs);
@@ -403,6 +405,7 @@ export class LspServerManager {
 				uri,
 				(state.open_documents.get(uri) ?? 0) + 1,
 			);
+			file_state = { abs, uri, state };
 			const diagnostics = await state.client.wait_for_diagnostics(
 				uri,
 				options.timeout_ms,
@@ -457,7 +460,16 @@ export class LspServerManager {
 				),
 			};
 		} finally {
-			if (file_state) await this.release_file_state(file_state);
+			if (file_state) {
+				await this.release_file_state(file_state);
+			} else if (state && request_started) {
+				state.active_request_count = Math.max(
+					0,
+					state.active_request_count - 1,
+				);
+				state.last_used_at = Date.now();
+				this.#schedule_idle_stop(state);
+			}
 		}
 	}
 

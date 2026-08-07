@@ -23,7 +23,7 @@ const diagnostic: LspDiagnostic = {
 const context = {} as ExtensionContext;
 
 describe('inline diagnostics', () => {
-	it('appends fresh diagnostics to the active write-owner result', async () => {
+	it('delivers fresh diagnostics privately to the active agent', async () => {
 		const snapshots: LspDiagnosticsSnapshot[] = [
 			{ revision: 0, by_uri: new Map() },
 			{
@@ -38,7 +38,7 @@ describe('inline diagnostics', () => {
 			notify_watched_file: vi.fn(),
 			wait_for_diagnostics: vi.fn().mockResolvedValue([diagnostic]),
 		});
-		const { events } = await create_test_lsp_extension({
+		const { events, messages } = await create_test_lsp_extension({
 			create_client: () => client,
 			read_file: async () => 'export const value = missing;\n',
 			cwd: () => '/repo',
@@ -64,9 +64,13 @@ describe('inline diagnostics', () => {
 			context,
 		);
 
-		expect(result.content[0].text).toBe('Wrote src/a.ts');
-		expect(result.content[1].text).toContain('LSP diagnostics');
-		expect(result.content[1].text).toContain('Broken value');
+		expect(result).toBeUndefined();
+		const message = messages[0].message as { content: unknown };
+		expect(message).toMatchObject({
+			customType: 'pi-lsp-diagnostics',
+			display: true,
+		});
+		expect(String(message.content)).toContain('Broken value');
 		expect(client.notify_watched_file).toHaveBeenCalledWith(
 			'file:///repo/src/a.ts',
 			1,
@@ -120,7 +124,7 @@ describe('inline diagnostics', () => {
 		deferred.resolve([diagnostic]);
 		await vi.waitFor(() => expect(messages).toHaveLength(1));
 		expect(messages[0].message).toMatchObject({
-			customType: 'pi-lsp-late-diagnostics',
+			customType: 'pi-lsp-diagnostics',
 			display: true,
 		});
 		expect(messages[0].options).toEqual({

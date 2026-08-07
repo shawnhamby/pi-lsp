@@ -15,7 +15,7 @@ import {
 const DEFAULT_INLINE_BUDGET_MS = 500;
 const DEFAULT_DEFERRED_BUDGET_MS = 12_000;
 const DEFAULT_SETTLE_MS = 200;
-const LATE_DIAGNOSTICS_MESSAGE = 'pi-lsp-late-diagnostics';
+const DIAGNOSTICS_MESSAGE = 'pi-lsp-diagnostics';
 
 export interface InlineDiagnosticsOptions {
 	diagnostics_on_write?: boolean;
@@ -134,12 +134,8 @@ export class InlineDiagnosticsController {
 			if (!inline.value || signal.aborted) return undefined;
 			const text = this.#format_fresh(inline.value);
 			if (!text) return undefined;
-			return {
-				content: [
-					...event.content,
-					{ type: 'text', text: `LSP diagnostics\n${text}` },
-				],
-			};
+			this.#send_diagnostics(absolute_path, version, text);
+			return undefined;
 		}
 
 		void work.then((result) => {
@@ -149,17 +145,21 @@ export class InlineDiagnosticsController {
 			}
 			const text = this.#format_fresh(result);
 			if (!text) return;
-			this.pi.sendMessage(
-				{
-					customType: LATE_DIAGNOSTICS_MESSAGE,
-					content: `Late LSP diagnostics\n${text}`,
-					display: true,
-					details: { file: absolute_path, version },
-				},
-				{ triggerTurn: false, deliverAs: 'steer' },
-			);
+			this.#send_diagnostics(absolute_path, version, text);
 		});
 		return undefined;
+	}
+
+	#send_diagnostics(file: string, version: number, text: string): void {
+		this.pi.sendMessage(
+			{
+				customType: DIAGNOSTICS_MESSAGE,
+				content: `LSP diagnostics\n${text}`,
+				display: true,
+				details: { file, version, text },
+			},
+			{ triggerTurn: false, deliverAs: 'steer' },
+		);
 	}
 
 	#is_enabled_tool(tool_name: MutationToolKind): boolean {

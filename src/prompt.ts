@@ -18,9 +18,8 @@ You have access to Language Server Protocol tools for diagnostics, hover/type in
 - Debugging TypeScript, JavaScript, Svelte, or other language-server-supported errors
 - Checking types, symbol definitions, or API documentation from code
 - Finding references more precisely than text search
-- Validating focused code changes before reporting completion
 
-After editing language-server-supported files, check changed files with LSP diagnostics before reporting completion or committing. Prefer lsp_diagnostics_many for batches: use git to identify changed files, filter to supported source files, then run diagnostics on that list.
+Successful writes already receive automatic, bounded LSP diagnostics. Do not run an explicit diagnostic sweep after every edit or before routine completion. Use lsp_diagnostics or lsp_diagnostics_many only when investigating a type error, following up on an inline warning, or performing an explicitly requested diagnostic check.
 
 Prefer LSP diagnostics over guessing from build output when a file-level check is enough. Use text search for broad discovery, then LSP tools for precise type and symbol questions.`;
 

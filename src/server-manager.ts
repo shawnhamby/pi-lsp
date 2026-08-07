@@ -536,6 +536,8 @@ export class LspServerManager {
 				command: server_config.command,
 				args: server_config.args,
 				root_uri,
+				initialization_options:
+					server_config.initialization_options,
 				language_id_for_uri: (uri) => {
 					try {
 						return this.#language_id_for_file(file_uri_to_path(uri));

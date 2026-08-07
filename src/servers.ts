@@ -1,5 +1,12 @@
-import { existsSync } from 'node:fs';
 import {
+	accessSync,
+	constants,
+	existsSync,
+	readFileSync,
+	realpathSync,
+} from 'node:fs';
+import {
+	delimiter,
 	dirname,
 	extname,
 	isAbsolute,
@@ -11,6 +18,7 @@ export interface LspServerConfig {
 	language: string;
 	command: string;
 	args: string[];
+	initialization_options?: Record<string, unknown>;
 	install_hint?: string;
 	is_project_local?: boolean;
 }
@@ -222,10 +230,21 @@ export function get_server_config(
 	const base = LANGUAGE_SERVERS[language];
 	if (!base) return undefined;
 	const resolved = resolve_server_command_info(base.command, cwd);
+	const typescript_lib =
+		language === 'typescript'
+			? resolve_typescript_lib(cwd)
+			: undefined;
 	return {
 		...base,
 		command: resolved.command,
 		is_project_local: resolved.is_project_local,
+		...(typescript_lib
+			? {
+					initialization_options: {
+						tsserver: { path: typescript_lib },
+					},
+				}
+			: {}),
 	};
 }
 
@@ -288,4 +307,57 @@ function resolve_local_binary(
 		join(directory, 'node_modules', '.bin', `${command}.cmd`),
 	];
 	return candidates.find((candidate) => existsSync(candidate));
+}
+
+function resolve_typescript_lib(cwd: string): string | undefined {
+	for (const dir of ancestor_directories(cwd)) {
+		const local_server = join(
+			dir,
+			'node_modules',
+			'typescript',
+			'lib',
+			'tsserver.js',
+		);
+		if (existsSync(local_server)) return dirname(local_server);
+	}
+
+	const tsc = resolve_path_executable('tsc');
+	if (!tsc) return undefined;
+	for (const target of executable_targets(tsc)) {
+		const server = resolve(dirname(target), '..', 'lib', 'tsserver.js');
+		if (existsSync(server)) return dirname(server);
+	}
+	return undefined;
+}
+
+function resolve_path_executable(command: string): string | undefined {
+	for (const directory of (process.env.PATH ?? '').split(delimiter)) {
+		if (!directory) continue;
+		const candidate = join(directory, command);
+		try {
+			accessSync(candidate, constants.X_OK);
+			return candidate;
+		} catch {
+			// Continue through PATH.
+		}
+	}
+	return undefined;
+}
+
+function executable_targets(executable: string): string[] {
+	const targets = new Set<string>();
+	try {
+		targets.add(realpathSync(executable));
+	} catch {
+		targets.add(executable);
+	}
+
+	try {
+		const shim = readFileSync(executable, 'utf8');
+		const target = /^# cmd-shim-target=(.+)$/m.exec(shim)?.[1]?.trim();
+		if (target && isAbsolute(target)) targets.add(target);
+	} catch {
+		// Native executables and unreadable shims have no embedded target.
+	}
+	return Array.from(targets);
 }

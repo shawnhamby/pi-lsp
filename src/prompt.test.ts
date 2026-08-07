@@ -23,10 +23,10 @@ describe('lsp prompt guidance', () => {
 			'Language server support via LSP tools',
 		);
 		expect(result.systemPrompt).toContain(
-			'check changed files with LSP diagnostics before reporting completion or committing',
+			'Successful writes already receive automatic, bounded LSP diagnostics',
 		);
 		expect(result.systemPrompt).toContain(
-			'Prefer LSP diagnostics over guessing from build output',
+			'Do not run an explicit diagnostic sweep after every edit',
 		);
 	});
 

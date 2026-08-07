@@ -81,6 +81,7 @@ export interface LspClientOptions {
 	command: string;
 	args: string[];
 	root_uri: string;
+	initialization_options?: Record<string, unknown>;
 	language_id_for_uri: (uri: string) => string | undefined;
 	request_timeout_ms?: number;
 }
@@ -202,6 +203,8 @@ export class LspClient extends EventEmitter {
 				this.#request('initialize', {
 					processId: process.pid,
 					rootUri: this.#options.root_uri,
+					initializationOptions:
+						this.#options.initialization_options,
 					capabilities: {
 						textDocument: {
 							publishDiagnostics: {

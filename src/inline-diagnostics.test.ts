@@ -23,7 +23,7 @@ const diagnostic: LspDiagnostic = {
 const context = {} as ExtensionContext;
 
 describe('inline diagnostics', () => {
-	it('appends fresh diagnostics to a successful write result', async () => {
+	it('appends fresh diagnostics to the active write-owner result', async () => {
 		const snapshots: LspDiagnosticsSnapshot[] = [
 			{ revision: 0, by_uri: new Map() },
 			{
@@ -48,7 +48,7 @@ describe('inline diagnostics', () => {
 		await events.get('tool_call')(
 			{
 				toolCallId: 'write-1',
-				toolName: 'write',
+				toolName: 'readSeek_write',
 				input: { path: 'src/a.ts', content: 'ignored' },
 			},
 			context,
@@ -56,7 +56,7 @@ describe('inline diagnostics', () => {
 		const result = await events.get('tool_result')(
 			{
 				toolCallId: 'write-1',
-				toolName: 'write',
+				toolName: 'readSeek_write',
 				input: { path: 'src/a.ts', content: 'ignored' },
 				content: [{ type: 'text', text: 'Wrote src/a.ts' }],
 				isError: false,

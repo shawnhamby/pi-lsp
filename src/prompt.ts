@@ -19,7 +19,7 @@ You have access to Language Server Protocol tools for diagnostics, hover/type in
 - Checking types, symbol definitions, or API documentation from code
 - Finding references more precisely than text search
 
-Successful writes already receive automatic, bounded LSP diagnostics. Do not run an explicit diagnostic sweep after every edit or before routine completion. Use lsp_diagnostics or lsp_diagnostics_many only when investigating a type error, following up on an inline warning, or performing an explicitly requested diagnostic check.
+Successful writes already receive automatic, bounded LSP diagnostics. Do not run an explicit diagnostic sweep after every edit or before routine completion. Use lsp_diagnostics or lsp_diagnostics_many only when investigating a type error, following up on an inline warning, or performing an explicitly requested diagnostic check. Treat LSP calls as internal implementation details and mention their results only when they materially affect the work.
 
 Prefer LSP diagnostics over guessing from build output when a file-level check is enough. Use text search for broad discovery, then LSP tools for precise type and symbol questions.`;
 

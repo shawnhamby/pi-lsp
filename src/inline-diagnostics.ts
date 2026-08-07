@@ -63,12 +63,13 @@ export class InlineDiagnosticsController {
 
 	register(): void {
 		this.pi.on('tool_call', (event) => {
-			if (!this.#is_enabled_tool(event.toolName)) return;
+			const mutation = mutation_tool_kind(event.toolName);
+			if (!mutation || !this.#is_enabled_tool(mutation)) return;
 			const path = input_path(event.input);
 			if (!path) return;
 			this.#change_type_by_call.set(
 				event.toolCallId,
-				event.toolName === 'write' && !existsSync(this.manager.resolve_abs(path))
+				mutation === 'write' && !existsSync(this.manager.resolve_abs(path))
 					? 1
 					: 2,
 			);
@@ -93,7 +94,8 @@ export class InlineDiagnosticsController {
 	): Promise<{ content: ToolResultEvent['content'] } | undefined> {
 		const change_type = this.#change_type_by_call.get(event.toolCallId);
 		this.#change_type_by_call.delete(event.toolCallId);
-		if (!change_type || event.isError || !this.#is_enabled_tool(event.toolName)) {
+		const mutation = mutation_tool_kind(event.toolName);
+		if (!change_type || event.isError || !mutation || !this.#is_enabled_tool(mutation)) {
 			return undefined;
 		}
 
@@ -160,7 +162,7 @@ export class InlineDiagnosticsController {
 		return undefined;
 	}
 
-	#is_enabled_tool(tool_name: string): boolean {
+	#is_enabled_tool(tool_name: MutationToolKind): boolean {
 		return (
 			(tool_name === 'write' && this.#options.diagnostics_on_write) ||
 			(tool_name === 'edit' && this.#options.diagnostics_on_edit)
@@ -203,6 +205,21 @@ export class InlineDiagnosticsController {
 		return relevant.filter(
 			(diagnostic) => !previous.has(diagnostic_identity(diagnostic)),
 		);
+	}
+}
+
+type MutationToolKind = 'write' | 'edit';
+
+function mutation_tool_kind(tool_name: string): MutationToolKind | undefined {
+	switch (tool_name) {
+		case 'write':
+		case 'readSeek_write':
+			return 'write';
+		case 'edit':
+		case 'readSeek_edit':
+			return 'edit';
+		default:
+			return undefined;
 	}
 }
 

@@ -23,6 +23,15 @@ import {
 } from './server-manager.js';
 
 const DIAGNOSTICS_MANY_CONCURRENCY = 8;
+const HIDDEN_TOOL_COMPONENT = {
+	render: () => [],
+	invalidate: () => {},
+};
+const HIDDEN_TOOL_RENDERING = {
+	renderShell: 'self' as const,
+	renderCall: () => HIDDEN_TOOL_COMPONENT,
+	renderResult: () => HIDDEN_TOOL_COMPONENT,
+};
 
 function make_tool_result(text: string, details: unknown = {}) {
 	return {
@@ -102,6 +111,7 @@ export function register_lsp_tools(
 ): void {
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_diagnostics',
 			label: 'LSP: diagnostics',
 			description:
@@ -132,6 +142,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_diagnostics_many',
 			label: 'LSP: diagnostics many',
 			description:
@@ -235,6 +246,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_find_symbol',
 			label: 'LSP: find symbol',
 			description:
@@ -292,6 +304,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_hover',
 			label: 'LSP: hover',
 			constrainedSampling: { type: 'json_schema', strict: 'prefer' },
@@ -318,6 +331,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_definition',
 			label: 'LSP: go to definition',
 			constrainedSampling: { type: 'json_schema', strict: 'prefer' },
@@ -351,6 +365,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_references',
 			label: 'LSP: find references',
 			description:
@@ -382,6 +397,7 @@ export function register_lsp_tools(
 
 	pi.registerTool(
 		defineTool({
+			...HIDDEN_TOOL_RENDERING,
 			name: 'lsp_document_symbols',
 			label: 'LSP: document symbols',
 			constrainedSampling: { type: 'json_schema', strict: 'prefer' },

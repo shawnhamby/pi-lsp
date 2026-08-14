@@ -17,6 +17,9 @@
 - Extracted the package into the standalone `shawnhamby/pi-lsp` fork while
   preserving upstream MIT attribution.
 - Python discovery now uses `pyright-langserver`.
+- The tool catalog remains available from the first turn while the
+  language-server manager, command UI, and inline-diagnostic runtime now load
+  only on first use.
 
 ## Upstream history
 

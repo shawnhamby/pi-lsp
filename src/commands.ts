@@ -1,5 +1,4 @@
 import {
-	type ExtensionAPI,
 	type ExtensionCommandContext,
 } from '@earendil-works/pi-coding-agent';
 import {
@@ -7,44 +6,7 @@ import {
 	show_picker_modal,
 } from '@spences10/pi-tui-modal';
 import { format_lsp_view, format_status_lines } from './format.js';
-import { LspServerManager } from './server-manager.js';
-
-export function register_lsp_command(
-	pi: ExtensionAPI,
-	manager: LspServerManager,
-): void {
-	pi.registerCommand('lsp', {
-		description: 'Show or manage language server state',
-		getArgumentCompletions: (prefix) => {
-			const parts = prefix.trim().split(/\s+/);
-			const subcommands = ['status', 'list', 'restart'];
-			if (!prefix.trim()) {
-				return subcommands.map((value) => ({
-					value,
-					label: value,
-				}));
-			}
-			if (parts.length <= 1) {
-				return subcommands
-					.filter((value) => value.startsWith(parts[0]))
-					.map((value) => ({ value, label: value }));
-			}
-			if (parts[0] === 'restart') {
-				const candidate = parts[1] ?? '';
-				return ['all', ...manager.list_supported_languages()]
-					.filter((value) => value.startsWith(candidate))
-					.map((value) => ({
-						value: `restart ${value}`,
-						label: value,
-					}));
-			}
-			return null;
-		},
-		handler: async (args, ctx) => {
-			await handle_lsp_command(args, ctx, manager);
-		},
-	});
-}
+import type { LspServerManager } from './server-manager.js';
 
 export async function handle_lsp_command(
 	args: string,

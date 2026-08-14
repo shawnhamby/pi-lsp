@@ -17,10 +17,7 @@ import {
 	to_lsp_tool_error,
 	type LspToolErrorDetails,
 } from './format.js';
-import {
-	LspServerManager,
-	type FileState,
-} from './server-manager.js';
+import type { FileState, LspServerManager } from './server-manager.js';
 
 const DIAGNOSTICS_MANY_CONCURRENCY = 8;
 const INTERNAL_DETAILS_KEY = Symbol.for('pi.internal-details-expanded');
@@ -155,7 +152,7 @@ async function with_file_state(
 
 export function register_lsp_tools(
 	pi: ExtensionAPI,
-	manager: LspServerManager,
+	load_manager: () => Promise<LspServerManager>,
 ): void {
 	pi.registerTool(
 		defineTool({
@@ -177,7 +174,7 @@ export function register_lsp_tools(
 				),
 			}),
 			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+				with_file_state(await load_manager(), params.file, ctx, async (result) => {
 					const diagnostics =
 						await result.state.client.wait_for_diagnostics(
 							result.uri,
@@ -210,6 +207,7 @@ export function register_lsp_tools(
 				),
 			}),
 			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
 				const wait_ms = params.wait_ms ?? 1500;
 				const lines_with_stats = await map_with_concurrency(
 					params.files,
@@ -332,7 +330,7 @@ export function register_lsp_tools(
 				),
 			}),
 			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+				with_file_state(await load_manager(), params.file, ctx, async (result) => {
 					const symbols = await result.state.client.document_symbols(
 						result.uri,
 					);
@@ -367,7 +365,7 @@ export function register_lsp_tools(
 				{ additionalProperties: false },
 			),
 			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+				with_file_state(await load_manager(), params.file, ctx, async (result) => {
 					const hover = await result.state.client.hover(result.uri, {
 						line: params.line,
 						character: params.character,
@@ -393,8 +391,9 @@ export function register_lsp_tools(
 				},
 				{ additionalProperties: false },
 			),
-			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
+				return with_file_state(manager, params.file, ctx, async (result) => {
 					const locations = await result.state.client.definition(
 						result.uri,
 						{
@@ -407,7 +406,8 @@ export function register_lsp_tools(
 						result.state.workspace_root,
 					);
 					return format_locations(locations, 'No definition found.');
-				}),
+				});
+			},
 		}),
 	);
 
@@ -424,8 +424,9 @@ export function register_lsp_tools(
 				character: Type.Number(),
 				include_declaration: Type.Optional(Type.Boolean()),
 			}),
-			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
+				return with_file_state(manager, params.file, ctx, async (result) => {
 					const locations = await result.state.client.references(
 						result.uri,
 						{
@@ -439,7 +440,8 @@ export function register_lsp_tools(
 						result.state.workspace_root,
 					);
 					return format_locations(locations, 'No references found.');
-				}),
+				});
+			},
 		}),
 	);
 
@@ -458,7 +460,7 @@ export function register_lsp_tools(
 				{ additionalProperties: false },
 			),
 			execute: async (_id, params, _signal, _on_update, ctx) =>
-				with_file_state(manager, params.file, ctx, async (result) => {
+				with_file_state(await load_manager(), params.file, ctx, async (result) => {
 					const symbols = await result.state.client.document_symbols(
 						result.uri,
 					);

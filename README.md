@@ -36,6 +36,12 @@ The extension registers tools for:
 - definitions and references;
 - document symbols.
 
+The tool names, descriptions, and schemas are registered immediately so Pi can
+offer them on the first turn. The language-server manager and inline-diagnostic
+runtime load once, on demand, when an LSP tool runs, `/lsp` opens, or an enabled
+write/edit diagnostic is requested. A session that never needs code intelligence
+does not import that runtime or start a language server.
+
 It also watches successful Pi `write` operations by default. Fresh errors and
 warnings that arrive within 500 ms are appended to the tool result. Slower
 diagnostics may arrive for up to 12 seconds as a non-turn-triggering steering
@@ -93,6 +99,10 @@ variables can be admitted through `MY_PI_LSP_ENV_ALLOWLIST` or the shared
 /lsp restart all
 /lsp restart <language>
 ```
+
+Opening `/lsp` is itself a lazy-load trigger. Before that first load, command
+completion offers the stable subcommands and `restart all`; language-specific
+restart completions appear after the manager is available.
 
 ## Custom harness options
 

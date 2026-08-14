@@ -1,15 +1,16 @@
 import type {
 	ExtensionAPI,
 	ExtensionContext,
+	ToolCallEvent,
 	ToolResultEvent,
 } from '@earendil-works/pi-coding-agent';
 import { existsSync } from 'node:fs';
 import type { LspDiagnostic } from './client.js';
 import { format_diagnostics } from './format.js';
-import {
+import type {
 	LspServerManager,
-	type MutationDiagnosticsEntry,
-	type MutationDiagnosticsResult,
+	MutationDiagnosticsEntry,
+	MutationDiagnosticsResult,
 } from './server-manager.js';
 
 const DEFAULT_INLINE_BUDGET_MS = 500;
@@ -61,22 +62,16 @@ export class InlineDiagnosticsController {
 		};
 	}
 
-	register(): void {
-		this.pi.on('tool_call', (event) => {
-			const mutation = mutation_tool_kind(event.toolName);
-			if (!mutation || !this.#is_enabled_tool(mutation)) return;
-			const path = input_path(event.input);
-			if (!path) return;
-			this.#change_type_by_call.set(
-				event.toolCallId,
-				mutation === 'write' && !existsSync(this.manager.resolve_abs(path))
-					? 1
-					: 2,
-			);
-		});
-
-		this.pi.on('tool_result', async (event, ctx) =>
-			this.#handle_tool_result(event, ctx),
+	handle_tool_call(event: ToolCallEvent): void {
+		const mutation = mutation_tool_kind(event.toolName);
+		if (!mutation || !this.#is_enabled_tool(mutation)) return;
+		const path = input_path(event.input);
+		if (!path) return;
+		this.#change_type_by_call.set(
+			event.toolCallId,
+			mutation === 'write' && !existsSync(this.manager.resolve_abs(path))
+				? 1
+				: 2,
 		);
 	}
 
@@ -88,7 +83,7 @@ export class InlineDiagnosticsController {
 		this.#change_type_by_call.clear();
 	}
 
-	async #handle_tool_result(
+	async handle_tool_result(
 		event: ToolResultEvent,
 		ctx: ExtensionContext,
 	): Promise<{ content: ToolResultEvent['content'] } | undefined> {

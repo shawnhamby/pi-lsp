@@ -33,8 +33,9 @@ The extension registers tools for:
 
 - diagnostics, including batched diagnostics;
 - hover information;
-- definitions and references;
-- document symbols.
+- definitions, implementations, and references;
+- document and workspace symbols;
+- preview-only symbol rename.
 
 The tool names, descriptions, and schemas are registered immediately so Pi can
 offer them on the first turn. The language-server manager and inline-diagnostic
@@ -72,7 +73,7 @@ executes a repository-controlled binary without the inherited trust check.
 
 | Languages | Server |
 | --- | --- |
-| TypeScript, JavaScript | `typescript-language-server` |
+| TypeScript, JavaScript | `tsc --lsp --stdio` |
 | Svelte | `svelteserver` |
 | Python | `pyright-langserver` |
 | Go | `gopls` |
@@ -90,6 +91,19 @@ Interactive sessions ask before execution; headless sessions skip them unless
 Language-server child processes receive a restricted environment. Additional
 variables can be admitted through `MY_PI_LSP_ENV_ALLOWLIST` or the shared
 `MY_PI_CHILD_ENV_ALLOWLIST`.
+
+TypeScript uses the compiler's native LSP mode. A project-local `tsc` remains
+subject to the same trust decision, and a compiler version without `--lsp`
+support fails with its unsupported-option error instead of silently starting a
+second server. Pyright may be project-local under that trust policy; otherwise
+its executable must be the verified path reported by the canonical pnpm global
+environment. An unrelated `pyright-langserver` on `PATH`, such as a duplicate
+shared-venv installation, is not used.
+
+`lsp_rename_preview` calls `textDocument/prepareRename` before
+`textDocument/rename`, accepts only in-workspace `file:` text edits, and never
+applies them. Resource create, rename, or delete operations and out-of-workspace
+targets are rejected.
 
 ## Commands
 

@@ -68,6 +68,42 @@ export interface LspHover {
 	range?: LspRange;
 }
 
+export interface LspTextEdit {
+	range: LspRange;
+	newText: string;
+}
+
+export interface LspWorkspaceSymbol {
+	name: string;
+	kind: number;
+	location: LspLocation | { uri: string };
+	containerName?: string;
+}
+
+export type LspPrepareRenameResult =
+	| LspRange
+	| { range: LspRange; placeholder: string }
+	| { defaultBehavior: boolean }
+	| null;
+
+export interface LspTextDocumentEdit {
+	textDocument: { uri: string; version?: number | null };
+	edits: LspTextEdit[];
+}
+
+export interface LspWorkspaceEdit {
+	changes?: Record<string, LspTextEdit[]>;
+	documentChanges?: Array<
+		| LspTextDocumentEdit
+		| {
+				kind: 'create' | 'rename' | 'delete';
+				uri?: string;
+				oldUri?: string;
+				newUri?: string;
+		  }
+	>;
+}
+
 interface JsonRpcMessage {
 	jsonrpc: '2.0';
 	id?: number | string;
@@ -129,6 +165,7 @@ export class LspClient extends EventEmitter {
 	#diagnostics_by_uri = new Map<string, LspDiagnostic[]>();
 	#diagnostics_revision = 0;
 	#diagnostic_waiters = new Set<() => void>();
+	#startup_stderr = '';
 
 	constructor(options: LspClientOptions) {
 		super();
@@ -136,6 +173,7 @@ export class LspClient extends EventEmitter {
 	}
 
 	async start(): Promise<void> {
+		this.#startup_stderr = '';
 		this.#proc = spawn(this.#options.command, this.#options.args, {
 			stdio: ['pipe', 'pipe', 'pipe'],
 			env: create_child_process_env(),
@@ -176,9 +214,15 @@ export class LspClient extends EventEmitter {
 		});
 		this.#proc.on('close', () => {
 			if (!this.#initialized) {
+				const stderr = this.#startup_stderr.trim();
+				const unsupported_native_lsp =
+					stderr.includes('--lsp') &&
+					/(unknown|unsupported|unrecognized)/i.test(stderr);
 				reject_start(
 					start_error(
-						`LSP server ${this.#options.command} closed before initialization`,
+						unsupported_native_lsp
+							? `TypeScript compiler ${this.#options.command} does not support native LSP (--lsp). ${stderr}`
+							: `LSP server ${this.#options.command} closed before initialization${stderr ? `: ${stderr}` : ''}`,
 					),
 				);
 			}
@@ -190,8 +234,12 @@ export class LspClient extends EventEmitter {
 			this.#initialized = false;
 			this.#proc = null;
 		});
-		this.#proc.stderr?.on('data', () => {
-			// Discard stderr; many servers are chatty.
+		this.#proc.stderr?.on('data', (chunk: Buffer) => {
+			if (!this.#initialized && this.#captures_typescript_startup_error()) {
+				this.#startup_stderr = (
+					this.#startup_stderr + chunk.toString('utf8')
+				).slice(-8_192);
+			}
 		});
 		this.#proc.stdout!.on('data', (chunk: Buffer) => {
 			this.#buffer = Buffer.concat([this.#buffer, chunk]);
@@ -214,7 +262,9 @@ export class LspClient extends EventEmitter {
 								contentFormat: ['markdown', 'plaintext'],
 							},
 							definition: { linkSupport: false },
+							implementation: { linkSupport: false },
 							references: {},
+							rename: { prepareSupport: true },
 							documentSymbol: {
 								hierarchicalDocumentSymbolSupport: true,
 							},
@@ -325,6 +375,51 @@ export class LspClient extends EventEmitter {
 			context: { includeDeclaration: include_declaration },
 		})) as LspLocation[] | null;
 		return result ?? [];
+	}
+
+	async implementation(
+		uri: string,
+		position: LspPosition,
+	): Promise<LspLocation[]> {
+		const result = (await this.#request('textDocument/implementation', {
+			textDocument: { uri },
+			position,
+		})) as
+			| LspLocation
+			| LspLocation[]
+			| LspLocationLink
+			| LspLocationLink[]
+			| null;
+		return normalize_location_result(result);
+	}
+
+	async workspace_symbols(query: string): Promise<LspWorkspaceSymbol[]> {
+		const result = (await this.#request('workspace/symbol', {
+			query,
+		})) as LspWorkspaceSymbol[] | null;
+		return result ?? [];
+	}
+
+	async prepare_rename(
+		uri: string,
+		position: LspPosition,
+	): Promise<LspPrepareRenameResult> {
+		return (await this.#request('textDocument/prepareRename', {
+			textDocument: { uri },
+			position,
+		})) as LspPrepareRenameResult;
+	}
+
+	async rename(
+		uri: string,
+		position: LspPosition,
+		new_name: string,
+	): Promise<LspWorkspaceEdit | null> {
+		return (await this.#request('textDocument/rename', {
+			textDocument: { uri },
+			position,
+			newName: new_name,
+		})) as LspWorkspaceEdit | null;
 	}
 
 	async document_symbols(uri: string): Promise<LspDocumentSymbol[]> {
@@ -510,6 +605,13 @@ export class LspClient extends EventEmitter {
 		if (this.listenerCount('error') > 0) {
 			this.emit('error', error);
 		}
+	}
+
+	#captures_typescript_startup_error(): boolean {
+		return (
+			/(^|[\\/])tsc(?:\.cmd)?$/i.test(this.#options.command) &&
+			this.#options.args.includes('--lsp')
+		);
 	}
 
 	#drain_buffer(): void {

@@ -10,13 +10,16 @@ import {
 	format_document_symbols,
 	format_hover,
 	format_locations,
+	format_rename_preview,
 	format_symbol_matches,
 	format_tool_error,
+	format_workspace_symbols,
 	SYMBOL_KIND_NAMES,
 	SYMBOL_KIND_SCHEMA,
 	to_lsp_tool_error,
 	type LspToolErrorDetails,
 } from './format.js';
+import type { LspTextEdit, LspWorkspaceEdit } from './client.js';
 import type { FileState, LspServerManager } from './server-manager.js';
 
 const DIAGNOSTICS_MANY_CONCURRENCY = 8;
@@ -148,6 +151,71 @@ async function with_file_state(
 	} finally {
 		await manager.release_file_state(result);
 	}
+}
+
+function collect_rename_text_edits(
+	workspace_edit: LspWorkspaceEdit | null,
+): Array<{ uri: string; edits: LspTextEdit[] }> {
+	if (!workspace_edit) return [];
+	const changes: Array<{ uri: string; edits: LspTextEdit[] }> = [];
+	if (workspace_edit.changes !== undefined) {
+		if (!is_record(workspace_edit.changes)) {
+			throw new Error('LSP rename returned invalid text edits.');
+		}
+		for (const [uri, edits] of Object.entries(workspace_edit.changes)) {
+			changes.push({ uri, edits: validate_text_edits(edits) });
+		}
+	}
+	if (workspace_edit.documentChanges !== undefined) {
+		if (!Array.isArray(workspace_edit.documentChanges)) {
+			throw new Error('LSP rename returned invalid document changes.');
+		}
+		for (const change of workspace_edit.documentChanges) {
+			const candidate: unknown = change;
+			if (is_record(candidate) && typeof candidate.kind === 'string') {
+				throw new Error(
+					`LSP rename preview rejected resource operation: ${candidate.kind}`,
+				);
+			}
+			if (
+				!is_record(candidate) ||
+				!is_record(candidate.textDocument) ||
+				typeof candidate.textDocument.uri !== 'string'
+			) {
+				throw new Error('LSP rename returned a non-text document change.');
+			}
+			changes.push({
+				uri: candidate.textDocument.uri,
+				edits: validate_text_edits(candidate.edits),
+			});
+		}
+	}
+	return changes;
+}
+
+function validate_text_edits(value: unknown): LspTextEdit[] {
+	if (!Array.isArray(value) || !value.every(is_text_edit)) {
+		throw new Error('LSP rename returned invalid text edits.');
+	}
+	return value;
+}
+
+function is_text_edit(value: unknown): value is LspTextEdit {
+	if (!is_record(value) || typeof value.newText !== 'string') return false;
+	if (!is_record(value.range)) return false;
+	return is_position(value.range.start) && is_position(value.range.end);
+}
+
+function is_position(value: unknown): boolean {
+	return (
+		is_record(value) &&
+		typeof value.line === 'number' &&
+		typeof value.character === 'number'
+	);
+}
+
+function is_record(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function register_lsp_tools(
@@ -440,6 +508,119 @@ export function register_lsp_tools(
 						result.state.workspace_root,
 					);
 					return format_locations(locations, 'No references found.');
+				});
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
+			...HIDDEN_TOOL_RENDERING,
+			name: 'lsp_implementation',
+			label: 'LSP: go to implementation',
+			constrainedSampling: { type: 'json_schema', strict: 'prefer' },
+			description:
+				'Find implementation locations for the symbol at a position. Positions are zero-based.',
+			parameters: Type.Object(
+				{
+					file: Type.String(),
+					line: Type.Number(),
+					character: Type.Number(),
+				},
+				{ additionalProperties: false },
+			),
+			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
+				return with_file_state(manager, params.file, ctx, async (result) => {
+					const locations = await result.state.client.implementation(
+						result.uri,
+						{ line: params.line, character: params.character },
+					);
+					await manager.validate_result_uris(
+						locations.map((location) => location.uri),
+						result.state.workspace_root,
+					);
+					return format_locations(
+						locations,
+						'No implementation found.',
+					);
+				});
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
+			...HIDDEN_TOOL_RENDERING,
+			name: 'lsp_workspace_symbols',
+			label: 'LSP: workspace symbols',
+			description:
+				'Find symbols by name across the workspace selected by an anchor file.',
+			parameters: Type.Object(
+				{
+					file: Type.String({
+						description: 'File used to select the language server and workspace.',
+					}),
+					query: Type.String(),
+				},
+				{ additionalProperties: false },
+			),
+			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
+				return with_file_state(manager, params.file, ctx, async (result) => {
+					const symbols = await result.state.client.workspace_symbols(
+						params.query,
+					);
+					await manager.validate_result_uris(
+						symbols.map((symbol) => symbol.location.uri),
+						result.state.workspace_root,
+					);
+					return format_workspace_symbols(params.query, symbols);
+				});
+			},
+		}),
+	);
+
+	pi.registerTool(
+		defineTool({
+			...HIDDEN_TOOL_RENDERING,
+			name: 'lsp_rename_preview',
+			label: 'LSP: preview rename',
+			constrainedSampling: { type: 'json_schema', strict: 'prefer' },
+			description:
+				'Preview a symbol rename without applying edits. Rejects resource operations and targets outside the workspace.',
+			parameters: Type.Object(
+				{
+					file: Type.String(),
+					line: Type.Number(),
+					character: Type.Number(),
+					new_name: Type.String(),
+				},
+				{ additionalProperties: false },
+			),
+			execute: async (_id, params, _signal, _on_update, ctx) => {
+				const manager = await load_manager();
+				return with_file_state(manager, params.file, ctx, async (result) => {
+					const position = {
+						line: params.line,
+						character: params.character,
+					};
+					const prepared = await result.state.client.prepare_rename(
+						result.uri,
+						position,
+					);
+					if (!prepared) return 'Rename is not valid at this position.';
+					const workspace_edit = await result.state.client.rename(
+						result.uri,
+						position,
+						params.new_name,
+					);
+					const changes = collect_rename_text_edits(workspace_edit);
+					manager.validate_workspace_uris(
+						changes.map((change) => change.uri),
+						result.state.workspace_root,
+					);
+					return format_rename_preview(params.new_name, changes);
 				});
 			},
 		}),

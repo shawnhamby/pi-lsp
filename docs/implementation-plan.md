@@ -19,9 +19,10 @@ repository lint, typecheck, and test commands.
   `spences10/my-pi/packages/pi-lsp`.
 - Pi target: `@earendil-works/pi-coding-agent` 0.84.x.
 - Existing capabilities retained: diagnostics, batched diagnostics, hover,
-  definitions, references, document symbols, server status/restart, idle
-  shutdown, restricted child environments, and confirmation before running an
-  untrusted project-local language-server binary.
+  definitions, implementations, references, document/workspace symbols,
+  preview-only rename, server status/restart, idle shutdown, restricted child
+  environments, and confirmation before running an untrusted project-local
+  language-server binary.
 - Existing architecture retained: one manager and at most one server process
   per language/workspace within a Pi session.
 
@@ -89,6 +90,28 @@ Acceptance: a clean checkout installs, typechecks, builds, and loads in Pi
 
 Acceptance: server selection is deterministic, missing binaries are harmless,
 and custom harnesses can narrow the public catalog without forking the manager.
+
+### F-012: native TypeScript ownership and semantic operations
+
+- Use trusted project-local `tsc --lsp --stdio` when available and the same
+  native compiler command globally. Surface the compiler's unsupported `--lsp`
+  error clearly when a project pins an older TypeScript version; do not add
+  `typescript-language-server` or start a second process as a fallback.
+- Keep project-local Pyright under the existing binary-trust decision. For the
+  global default, resolve the executable from `pnpm bin --global` and verify
+  that its shim target belongs to the pnpm-global Pyright package. Do not fall
+  through to a duplicate shared-venv executable on `PATH`.
+- Add `textDocument/implementation` and `workspace/symbol` through the existing
+  lazy client and manager.
+- Add rename preview through `textDocument/prepareRename` followed by
+  `textDocument/rename`. Accept only `file:` text edits whose targets remain
+  inside the selected workspace, reject resource operations, and never apply
+  the returned edits.
+
+Acceptance: one lazy manager still owns at most one server per
+language/workspace; project binaries remain trust-gated; child environments
+remain restricted; missing or incompatible servers fail without installation;
+and rename is a read-only preview across in-root files.
 
 ## Phase 3: fast mutation diagnostics
 
@@ -162,6 +185,9 @@ contract:
 - diagnostic deduplication and clean-result silence;
 - deferred delivery does not trigger another agent turn;
 - project-local binary trust and restricted environment still hold.
+- native TypeScript startup failure and canonical pnpm-global Pyright selection;
+- implementation/workspace-symbol URI confinement and rename-preview edit
+  confinement, resource-operation rejection, and no-write behavior.
 
 Run one TypeScript and one Python live smoke after package-level checks. Broader
 language matrices are server-admission work, not a prerequisite for the inline

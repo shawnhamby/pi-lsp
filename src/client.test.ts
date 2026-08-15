@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
 	LspClient,
@@ -50,6 +51,44 @@ describe('LspClient.start', () => {
 				'does not support native LSP (--lsp)',
 			);
 		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe('LspClient diagnostics', () => {
+	it('pulls diagnostics from servers that advertise diagnosticProvider', async () => {
+		const root = mkdtempSync(join(tmpdir(), 'my-pi-lsp-'));
+		const file = join(root, 'main.ts');
+		const source =
+			'export function greet(name: string) { return `Hi ${name}`; }\ngreet(42);\n';
+		writeFileSync(file, source);
+		const server = join(
+			dirname(fileURLToPath(import.meta.url)),
+			'../test/pull-diagnostics-server.mjs',
+		);
+		const client = new LspClient({
+			command: process.execPath,
+			args: [server],
+			root_uri: pathToFileURL(root).href,
+			language_id_for_uri: () => 'typescript',
+			request_timeout_ms: 1_000,
+		});
+
+		try {
+			await client.start();
+			const uri = pathToFileURL(file).href;
+			await client.ensure_document_open(uri, source);
+			await expect(client.wait_for_diagnostics(uri, 1_000)).resolves.toEqual([
+				expect.objectContaining({
+					code: 2345,
+					source: 'ts',
+					message:
+						"Argument of type 'number' is not assignable to parameter of type 'string'.",
+				}),
+			]);
+		} finally {
+			await client.stop();
 			rmSync(root, { recursive: true, force: true });
 		}
 	});

@@ -113,6 +113,23 @@ interface JsonRpcMessage {
 	error?: { code: number; message: string; data?: unknown };
 }
 
+interface LspInitializeResult {
+	capabilities?: {
+		diagnosticProvider?: unknown;
+	};
+}
+
+type LspDocumentDiagnosticReport =
+	| {
+			kind: 'full';
+			items: LspDiagnostic[];
+			resultId?: string;
+	  }
+	| {
+			kind: 'unchanged';
+			resultId: string;
+	  };
+
 export interface LspClientOptions {
 	command: string;
 	args: string[];
@@ -165,6 +182,7 @@ export class LspClient extends EventEmitter {
 	#diagnostics_by_uri = new Map<string, LspDiagnostic[]>();
 	#diagnostics_revision = 0;
 	#diagnostic_waiters = new Set<() => void>();
+	#supports_pull_diagnostics = false;
 	#startup_stderr = '';
 
 	constructor(options: LspClientOptions) {
@@ -247,7 +265,7 @@ export class LspClient extends EventEmitter {
 		});
 
 		try {
-			await Promise.race([
+			const initialize_result = (await Promise.race([
 				this.#request('initialize', {
 					processId: process.pid,
 					rootUri: this.#options.root_uri,
@@ -255,6 +273,10 @@ export class LspClient extends EventEmitter {
 						this.#options.initialization_options,
 					capabilities: {
 						textDocument: {
+							diagnostic: {
+								dynamicRegistration: false,
+								relatedDocumentSupport: false,
+							},
 							publishDiagnostics: {
 								relatedInformation: true,
 							},
@@ -279,7 +301,10 @@ export class LspClient extends EventEmitter {
 					],
 				}),
 				start_failure,
-			]);
+			])) as LspInitializeResult;
+			this.#supports_pull_diagnostics = Boolean(
+				initialize_result.capabilities?.diagnosticProvider,
+			);
 			this.#notify('initialized', {});
 			this.#initialized = true;
 			start_reject = null;
@@ -467,6 +492,22 @@ export class LspClient extends EventEmitter {
 		timeout_ms = 1500,
 		options: LspDiagnosticsWaitOptions = {},
 	): Promise<LspDiagnostic[]> {
+		if (this.#supports_pull_diagnostics) {
+			if (options.signal?.aborted) {
+				throw options.signal.reason ?? new Error('LSP diagnostics aborted');
+			}
+			const report = (await this.#request(
+				'textDocument/diagnostic',
+				{ textDocument: { uri } },
+				timeout_ms,
+			)) as LspDocumentDiagnosticReport;
+			if (report.kind === 'full') {
+				this.#diagnostics_by_uri.set(uri, report.items);
+				this.#diagnostics_revision += 1;
+				this.emit('diagnostics', uri);
+			}
+			return this.get_diagnostics(uri);
+		}
 		const is_fresh = () =>
 			options.after_revision === undefined ||
 			this.#diagnostics_revision > options.after_revision;

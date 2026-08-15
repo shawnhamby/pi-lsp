@@ -21,6 +21,11 @@
   language-server manager, command UI, and inline-diagnostic runtime now load
   only on first use.
 
+### Fixed
+
+- Diagnostics now use the LSP pull-diagnostics request when a server advertises
+  `diagnosticProvider`, including TypeScript's native `tsc --lsp` server.
+
 ## Upstream history
 
 The entries below predate the standalone fork.

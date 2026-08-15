@@ -5,14 +5,17 @@ import {
 	readFileSync,
 	realpathSync,
 } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import {
 	delimiter,
 	dirname,
 	extname,
 	isAbsolute,
 	join,
+	relative,
 	resolve,
 } from 'node:path';
+import { create_child_process_env } from './env.js';
 
 export interface LspServerConfig {
 	language: string;
@@ -21,6 +24,7 @@ export interface LspServerConfig {
 	initialization_options?: Record<string, unknown>;
 	install_hint?: string;
 	is_project_local?: boolean;
+	resolution_error?: string;
 }
 
 const EXTENSION_LANGUAGES: Record<string, string> = {
@@ -82,17 +86,17 @@ const EXTENSION_LANGUAGE_IDS: Record<string, string> = {
 const LANGUAGE_SERVERS: Record<string, LspServerConfig> = {
 	typescript: {
 		language: 'typescript',
-		command: 'typescript-language-server',
-		args: ['--stdio'],
+		command: 'tsc',
+		args: ['--lsp', '--stdio'],
 		install_hint:
-			'Install TypeScript LSP with: pnpm add -D typescript typescript-language-server',
+			'Install a TypeScript version with native LSP support, then expose tsc through the project or pnpm global bin directory.',
 	},
 	python: {
 		language: 'python',
 		command: 'pyright-langserver',
 		args: ['--stdio'],
 		install_hint:
-			'Install Pyright and ensure pyright-langserver is on PATH.',
+			'Install Pyright in the canonical pnpm global environment.',
 	},
 	rust: {
 		language: 'rust',
@@ -229,21 +233,16 @@ export function get_server_config(
 ): LspServerConfig | undefined {
 	const base = LANGUAGE_SERVERS[language];
 	if (!base) return undefined;
-	const resolved = resolve_server_command_info(base.command, cwd);
-	const typescript_lib =
-		language === 'typescript'
-			? resolve_typescript_lib(cwd)
-			: undefined;
+	const resolved: ResolvedServerCommand & { resolution_error?: string } =
+		language === 'python'
+			? resolve_pyright_command(cwd)
+			: resolve_server_command_info(base.command, cwd);
 	return {
 		...base,
 		command: resolved.command,
 		is_project_local: resolved.is_project_local,
-		...(typescript_lib
-			? {
-					initialization_options: {
-						tsserver: { path: typescript_lib },
-					},
-				}
+		...('resolution_error' in resolved
+			? { resolution_error: resolved.resolution_error }
 			: {}),
 	};
 }
@@ -309,39 +308,80 @@ function resolve_local_binary(
 	return candidates.find((candidate) => existsSync(candidate));
 }
 
-function resolve_typescript_lib(cwd: string): string | undefined {
+function resolve_pyright_command(cwd: string):
+	ResolvedServerCommand & { resolution_error?: string } {
 	for (const dir of ancestor_directories(cwd)) {
-		const local_server = join(
-			dir,
-			'node_modules',
-			'typescript',
-			'lib',
-			'tsserver.js',
-		);
-		if (existsSync(local_server)) return dirname(local_server);
+		const local = resolve_local_binary(dir, 'pyright-langserver');
+		if (local) return { command: local, is_project_local: true };
 	}
 
-	const tsc = resolve_path_executable('tsc');
-	if (!tsc) return undefined;
-	for (const target of executable_targets(tsc)) {
-		const server = resolve(dirname(target), '..', 'lib', 'tsserver.js');
-		if (existsSync(server)) return dirname(server);
+	const canonical = resolve_verified_pnpm_global_binary(
+		'pyright-langserver',
+		'pyright',
+	);
+	if (canonical) {
+		return { command: canonical, is_project_local: false };
 	}
-	return undefined;
+	return {
+		command: 'pyright-langserver',
+		is_project_local: false,
+		resolution_error:
+			'No verified pnpm-global Pyright language server was found. Install Pyright with pnpm globally and ensure `pnpm bin --global` names its canonical executable directory.',
+	};
 }
 
-function resolve_path_executable(command: string): string | undefined {
-	for (const directory of (process.env.PATH ?? '').split(delimiter)) {
-		if (!directory) continue;
-		const candidate = join(directory, command);
-		try {
-			accessSync(candidate, constants.X_OK);
-			return candidate;
-		} catch {
-			// Continue through PATH.
-		}
+function resolve_verified_pnpm_global_binary(
+	command: string,
+	package_name: string,
+): string | undefined {
+	try {
+		const env = create_child_process_env();
+		const global_bin = execFileSync('pnpm', ['bin', '--global'], {
+			encoding: 'utf8',
+			env,
+			stdio: ['ignore', 'pipe', 'ignore'],
+			timeout: 2_000,
+		}).trim();
+		const global_root = execFileSync('pnpm', ['root', '--global'], {
+			encoding: 'utf8',
+			env,
+			stdio: ['ignore', 'pipe', 'ignore'],
+			timeout: 2_000,
+		}).trim();
+		if (!isAbsolute(global_bin) || !isAbsolute(global_root)) return undefined;
+
+		const executable = [
+			join(global_bin, command),
+			join(global_bin, `${command}.cmd`),
+		].find((candidate) => {
+			try {
+				accessSync(candidate, constants.X_OK);
+				return true;
+			} catch {
+				return false;
+			}
+		});
+		if (!executable) return undefined;
+
+		const global_store = dirname(global_root);
+		const package_segment = `/node_modules/${package_name}/`;
+		const verified = executable_targets(executable).some((target) => {
+			const normalized = target.replaceAll('\\', '/');
+			return (
+				existsSync(target) &&
+				is_within(global_store, target) &&
+				normalized.includes(package_segment)
+			);
+		});
+		return verified ? executable : undefined;
+	} catch {
+		return undefined;
 	}
-	return undefined;
+}
+
+function is_within(root: string, candidate: string): boolean {
+	const rel = relative(root, candidate);
+	return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 function executable_targets(executable: string): string[] {

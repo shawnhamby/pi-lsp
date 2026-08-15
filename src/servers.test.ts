@@ -5,7 +5,7 @@ import {
 	writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	detect_language,
@@ -70,16 +70,16 @@ describe('resolve_server_command', () => {
 			root,
 			'node_modules',
 			'.bin',
-			'typescript-language-server',
+			'tsc',
 		);
 		writeFileSync(binary, '#!/bin/sh\n', { mode: 0o755 });
 
 		expect(
-			resolve_server_command('typescript-language-server', nested),
+			resolve_server_command('tsc', nested),
 		).toBe(binary);
 		expect(
 			resolve_server_command_info(
-				'typescript-language-server',
+				'tsc',
 				nested,
 			),
 		).toEqual({ command: binary, is_project_local: true });
@@ -132,12 +132,90 @@ describe('get_server_config', () => {
 		const config = get_server_config('typescript', cwd);
 		expect(config).toMatchObject({
 			language: 'typescript',
-			args: ['--stdio'],
+			args: ['--lsp', '--stdio'],
 		});
-		expect(config?.command).toBe('typescript-language-server');
+		expect(config?.command).toBe('tsc');
 	});
 
 	it('returns undefined for unknown languages', () => {
 		expect(get_server_config('elixir')).toBeUndefined();
+	});
+
+	it('prefers a verified pnpm-global Pyright over PATH drift', () => {
+		const root = mkdtempSync(join(tmpdir(), 'my-pi-lsp-'));
+		const command_bin = join(root, 'commands');
+		const global_bin = join(root, 'pnpm-bin');
+		const global_root = join(root, 'global', 'node_modules');
+		const target = join(
+			root,
+			'global',
+			'store',
+			'node_modules',
+			'pyright',
+			'langserver.index.js',
+		);
+		dirs.push(root);
+		mkdirSync(command_bin, { recursive: true });
+		mkdirSync(global_bin, { recursive: true });
+		mkdirSync(dirname(target), { recursive: true });
+		mkdirSync(global_root, { recursive: true });
+		writeFileSync(target, '// pyright\n');
+		writeFileSync(
+			join(command_bin, 'pnpm'),
+			`#!/bin/sh\nif [ "$1" = "bin" ]; then\n  echo "${global_bin}"\nelse\n  echo "${global_root}"\nfi\n`,
+			{ mode: 0o755 },
+		);
+		const canonical = join(global_bin, 'pyright-langserver');
+		writeFileSync(
+			canonical,
+			`#!/bin/sh\n# cmd-shim-target=${target}\n`,
+			{ mode: 0o755 },
+		);
+		writeFileSync(join(command_bin, 'pyright-langserver'), '#!/bin/sh\n', {
+			mode: 0o755,
+		});
+
+		const previous_path = process.env.PATH;
+		process.env.PATH = `${command_bin}:${previous_path ?? ''}`;
+		try {
+			expect(get_server_config('python', root)).toMatchObject({
+				command: canonical,
+				is_project_local: false,
+			});
+		} finally {
+			process.env.PATH = previous_path;
+		}
+	});
+
+	it('rejects an unverified PATH Pyright instead of using shared-environment drift', () => {
+		const root = mkdtempSync(join(tmpdir(), 'my-pi-lsp-'));
+		const command_bin = join(root, 'commands');
+		const global_bin = join(root, 'pnpm-bin');
+		const global_root = join(root, 'global', 'node_modules');
+		dirs.push(root);
+		mkdirSync(command_bin, { recursive: true });
+		mkdirSync(global_bin, { recursive: true });
+		mkdirSync(global_root, { recursive: true });
+		writeFileSync(
+			join(command_bin, 'pnpm'),
+			`#!/bin/sh\nif [ "$1" = "bin" ]; then\n  echo "${global_bin}"\nelse\n  echo "${global_root}"\nfi\n`,
+			{ mode: 0o755 },
+		);
+		writeFileSync(join(command_bin, 'pyright-langserver'), '#!/bin/sh\n', {
+			mode: 0o755,
+		});
+
+		const previous_path = process.env.PATH;
+		process.env.PATH = `${command_bin}:${previous_path ?? ''}`;
+		try {
+			expect(get_server_config('python', root)).toMatchObject({
+				command: 'pyright-langserver',
+				resolution_error: expect.stringContaining(
+					'No verified pnpm-global Pyright',
+				),
+			});
+		} finally {
+			process.env.PATH = previous_path;
+		}
 	});
 });

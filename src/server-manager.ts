@@ -14,6 +14,9 @@ import {
 	type LspHover,
 	type LspLocation,
 	type LspPosition,
+	type LspPrepareRenameResult,
+	type LspWorkspaceEdit,
+	type LspWorkspaceSymbol,
 } from './client.js';
 import {
 	LspToolError,
@@ -53,6 +56,20 @@ export interface LspClientLike {
 		position: LspPosition,
 		include_declaration: boolean,
 	): Promise<LspLocation[]>;
+	implementation(
+		uri: string,
+		position: LspPosition,
+	): Promise<LspLocation[]>;
+	workspace_symbols(query: string): Promise<LspWorkspaceSymbol[]>;
+	prepare_rename(
+		uri: string,
+		position: LspPosition,
+	): Promise<LspPrepareRenameResult>;
+	rename(
+		uri: string,
+		position: LspPosition,
+		new_name: string,
+	): Promise<LspWorkspaceEdit | null>;
 	document_symbols(uri: string): Promise<LspDocumentSymbol[]>;
 	wait_for_diagnostics(
 		uri: string,
@@ -261,6 +278,10 @@ export class LspServerManager {
 		workspace_root: string,
 	): Promise<void> {
 		await this.#validate_result_uris(uris, workspace_root);
+	}
+
+	validate_workspace_uris(uris: string[], workspace_root: string): void {
+		default_validate_result_uris(uris, workspace_root);
 	}
 
 	async clear_language_state(language?: string): Promise<void> {
@@ -518,6 +539,18 @@ export class LspServerManager {
 
 		let server_config = this.#get_server_config(language, workspace_root);
 		if (!server_config) return undefined;
+		if (server_config.resolution_error) {
+			const failure = to_lsp_tool_error(
+				file_path,
+				language,
+				workspace_root,
+				server_config.command,
+				server_config.install_hint,
+				new Error(server_config.resolution_error),
+			);
+			this.failed_servers.set(key, failure);
+			throw new LspToolError(failure);
+		}
 		if (
 			server_config.is_project_local &&
 			!(await should_use_project_lsp_binary(server_config, ctx))

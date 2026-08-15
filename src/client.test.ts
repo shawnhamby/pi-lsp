@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	LspClient,
@@ -24,6 +27,31 @@ describe('LspClient.start', () => {
 		await expect(client.start()).rejects.toBeInstanceOf(
 			LspClientStartError,
 		);
+	});
+
+	it('explains when a project compiler lacks native LSP support', async () => {
+		const root = mkdtempSync(join(tmpdir(), 'my-pi-lsp-'));
+		const tsc = join(root, 'tsc');
+		writeFileSync(
+			tsc,
+			"#!/bin/sh\necho \"error TS5023: Unknown compiler option '--lsp'.\" >&2\nexit 1\n",
+			{ mode: 0o755 },
+		);
+		try {
+			const client = new LspClient({
+				command: tsc,
+				args: ['--lsp', '--stdio'],
+				root_uri: 'file:///repo',
+				language_id_for_uri: () => 'typescript',
+				request_timeout_ms: 500,
+			});
+
+			await expect(client.start()).rejects.toThrow(
+				'does not support native LSP (--lsp)',
+			);
+		} finally {
+			rmSync(root, { recursive: true, force: true });
+		}
 	});
 });
 

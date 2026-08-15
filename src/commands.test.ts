@@ -25,7 +25,7 @@ describe('lsp command', () => {
 
 		await commands.get('lsp').handler('', ctx);
 		expect(notifications.pop()?.message).toContain(
-			'typescript: idle — typescript-language-server',
+			'typescript: idle — tsc',
 		);
 
 		await tools.get('lsp_hover').execute('1', {

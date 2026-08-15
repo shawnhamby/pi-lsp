@@ -6,6 +6,8 @@ import {
 	type LspDocumentSymbol,
 	type LspHover,
 	type LspLocation,
+	type LspTextEdit,
+	type LspWorkspaceSymbol,
 } from './client.js';
 import {
 	get_server_config,
@@ -313,6 +315,53 @@ export function format_locations(
 			return `${path}:${loc.range.start.line + 1}:${loc.range.start.character + 1}`;
 		})
 		.join('\n');
+}
+
+export function format_workspace_symbols(
+	query: string,
+	symbols: LspWorkspaceSymbol[],
+): string {
+	if (symbols.length === 0) return `No workspace symbols matching "${query}".`;
+	return [
+		`${symbols.length} workspace symbol(s) matching "${query}"`,
+		...symbols.map((symbol) => {
+			const location = symbol.location;
+			const path = file_url_to_path_or_value(location.uri);
+			const position =
+				'range' in location
+					? `:${location.range.start.line + 1}:${location.range.start.character + 1}`
+					: '';
+			const container = symbol.containerName
+				? ` in ${symbol.containerName}`
+				: '';
+			return `${symbol_kind_label(symbol.kind)} ${symbol.name}${container} @ ${path}${position}`;
+		}),
+	].join('\n');
+}
+
+export function format_rename_preview(
+	new_name: string,
+	changes: Array<{ uri: string; edits: LspTextEdit[] }>,
+): string {
+	const edit_count = changes.reduce(
+		(total, change) => total + change.edits.length,
+		0,
+	);
+	if (edit_count === 0) return `Rename to "${new_name}" produced no edits.`;
+	const lines = [
+		`Rename preview only: ${edit_count} text edit(s) in ${changes.length} file(s). No files were changed.`,
+	];
+	for (const change of changes) {
+		lines.push(file_url_to_path_or_value(change.uri));
+		for (const edit of change.edits) {
+			const start = edit.range.start;
+			const end = edit.range.end;
+			lines.push(
+				`  ${start.line + 1}:${start.character + 1}-${end.line + 1}:${end.character + 1} -> ${JSON.stringify(edit.newText)}`,
+			);
+		}
+	}
+	return lines.join('\n');
 }
 
 export function format_document_symbols(

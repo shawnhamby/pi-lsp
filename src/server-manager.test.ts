@@ -181,7 +181,7 @@ describe('lsp server manager', () => {
 				root,
 				'node_modules',
 				'.bin',
-				'typescript-language-server',
+				'tsc',
 			),
 			'#!/bin/sh\n',
 			{ mode: 0o755 },
@@ -209,7 +209,7 @@ describe('lsp server manager', () => {
 
 		expect(create_client).toHaveBeenCalledWith(
 			expect.objectContaining({
-				command: 'typescript-language-server',
+				command: 'tsc',
 			}),
 		);
 	});
